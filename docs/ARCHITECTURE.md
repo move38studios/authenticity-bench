@@ -29,61 +29,68 @@ authenticity-bench/
 │   ├── api/
 │   │   ├── auth/[...all]/route.ts        # Better Auth catch-all
 │   │   ├── admin/whitelist/route.ts      # Whitelist CRUD (admin-only)
-│   │   ├── models/route.ts              # Model config CRUD
-│   │   ├── dilemmas/route.ts            # Dilemma CRUD
-│   │   ├── values/route.ts             # Values system CRUD
-│   │   ├── techniques/route.ts          # Mental technique CRUD
-│   │   ├── modifiers/route.ts           # Modifier CRUD
-│   │   ├── experiments/
-│   │   │   ├── route.ts                 # Experiment CRUD
-│   │   │   ├── [id]/run/route.ts        # Trigger experiment execution
-│   │   │   ├── [id]/status/route.ts     # Live status + progress
-│   │   │   └── [id]/export/route.ts     # Data export (CSV/JSON)
-│   │   └── chat/route.ts               # Analysis chat agent endpoint
+│   │   ├── models/                       # Model config CRUD
+│   │   ├── dilemmas/                     # Dilemma CRUD
+│   │   ├── values/                       # Values system CRUD
+│   │   ├── techniques/                   # Mental technique CRUD
+│   │   └── modifiers/                    # Modifier CRUD
+│   ├── admin/
+│   │   ├── layout.tsx                    # Admin auth gate + admin sidebar
+│   │   └── page.tsx                      # Admin: whitelist manager
 │   ├── dashboard/
-│   │   ├── layout.tsx                    # Session gate + nav
+│   │   ├── layout.tsx                    # Session gate + dashboard sidebar
 │   │   ├── page.tsx                      # Overview dashboard
-│   │   ├── admin/page.tsx                # Admin: whitelist manager
-│   │   ├── library/
-│   │   │   ├── dilemmas/page.tsx         # Browse/create/edit dilemmas
-│   │   │   ├── values/page.tsx          # Browse/create/edit values systems
-│   │   │   ├── techniques/page.tsx      # Browse/create/edit mental techniques
-│   │   │   └── modifiers/page.tsx       # Browse/create/edit modifiers
-│   │   ├── models/page.tsx              # Model config management
-│   │   └── experiments/
-│   │       ├── page.tsx                  # List experiments
-│   │       ├── new/page.tsx             # Experiment builder (multi-step)
-│   │       └── [id]/page.tsx            # Experiment detail: status, results, chat
-│   ├── sign-in/page.tsx
+│   │   └── library/
+│   │       ├── dilemmas/page.tsx         # Browse/create/edit dilemmas
+│   │       ├── values/page.tsx          # Browse/create/edit values systems
+│   │       ├── techniques/page.tsx      # Browse/create/edit mental techniques
+│   │       ├── modifiers/page.tsx       # Browse/create/edit modifiers
+│   │       └── models/page.tsx          # Model config management
+│   ├── sign-in/page.tsx                  # Server component: redirects if signed in
 │   ├── page.tsx
 │   ├── layout.tsx
 │   └── globals.css
 ├── components/
-│   ├── ui/                               # shadcn components
-│   ├── dashboard-nav.tsx
+│   ├── ui/                               # shadcn components (incl. sidebar)
+│   ├── admin/
+│   │   ├── admin-sidebar.tsx             # Admin sidebar (whitelist nav)
+│   │   └── admin-header.tsx              # Admin header with sidebar trigger
+│   ├── dashboard/
+│   │   ├── dashboard-sidebar.tsx         # Dashboard sidebar (library nav)
+│   │   └── dashboard-header.tsx          # Dashboard header with sidebar trigger
+│   ├── sidebar-user-badge.tsx            # User dropdown in sidebar footer
+│   ├── sign-in-form.tsx                  # OTP sign-in form (client component)
 │   ├── whitelist-manager.tsx
-│   ├── experiment-builder/               # Multi-step experiment config UI
-│   ├── content-editor.tsx                # Markdown editor for values/techniques/etc
-│   └── analysis-chat.tsx                 # Chat interface for data interrogation
+│   ├── content-list.tsx                  # Generic CRUD list component
+│   └── markdown-content-form.tsx         # Shared form for name+content+description entities
+├── hooks/
+│   └── use-mobile.ts                     # Mobile breakpoint detection
 ├── lib/
-│   ├── auth.ts
-│   ├── auth-client.ts
+│   ├── auth.ts                           # Better Auth server config
+│   ├── auth-client.ts                    # Better Auth client
 │   ├── utils.ts
+│   ├── api/
+│   │   ├── helpers.ts                    # Shared API utilities (auth, validation, responses)
+│   │   └── schemas.ts                    # Zod schemas for all content entities
 │   ├── db/
-│   │   ├── index.ts
-│   │   └── schema.ts                     # All table definitions
+│   │   ├── index.ts                      # Drizzle + Neon connection
+│   │   └── schema/
+│   │       ├── auth.ts                   # Better Auth tables + allowed_email
+│   │       ├── content.ts               # Content entity tables
+│   │       └── index.ts                 # Re-exports
 │   └── services/
-│       ├── email.ts
-│       ├── whitelist.ts
-│       ├── experiment-runner.ts          # Orchestrates experiment execution
-│       ├── prompt-builder.ts             # Assembles system/user prompts
-│       ├── noise.ts                      # Paraphrasing + framing jitter
-│       ├── model-caller.ts              # Unified interface to call any model provider
-│       └── analysis-agent.ts            # Post-experiment analysis agent
+│       ├── email.ts                      # Resend wrapper (console.log in dev)
+│       ├── whitelist.ts                  # Email/domain whitelist checker
+│       └── llm/
+│           ├── index.ts                  # Barrel exports
+│           ├── llm.ts                    # getModel, generateText, generateObject, streamText
+│           ├── providers.ts             # Provider registry (Anthropic, OpenAI, Google, OpenRouter, Groq, Custom)
+│           ├── reasoning.ts             # Extended thinking config per provider
+│           └── types.ts                 # LLMProvider, options, response types
 ├── scripts/
 │   └── seed.ts
 ├── drizzle/
-├── proxy.ts
+├── proxy.ts                              # Next.js 16 proxy (protects /dashboard/*, /admin/*)
 ├── drizzle.config.ts
 └── components.json
 ```
@@ -106,9 +113,9 @@ authenticity-bench/
 
 ### Route Protection
 
-- `proxy.ts` checks for session cookie on `/dashboard/*` routes, redirects to `/sign-in` if absent (edge/CDN level)
+- `proxy.ts` checks for session cookie on `/dashboard/*` and `/admin/*` routes, redirects to `/sign-in` if absent (edge/CDN level)
 - `app/dashboard/layout.tsx` validates the session server-side and redirects if invalid (SSR level)
-- Admin pages additionally check `session.user.role === "admin"`
+- `app/admin/layout.tsx` validates session + admin role, redirects non-admins to `/dashboard`
 
 ## Database
 
@@ -163,14 +170,15 @@ Ensures judgments measure real model behavior, not token-sequence artifacts:
 - `noise_index > 0`: fast LLM paraphrases the dilemma (preserving all details) + randomized framing preamble
 - Actual text sent is stored on the judgment row for reproducibility
 
-### Model Caller (`lib/services/model-caller.ts`)
+### LLM Service (`lib/services/llm/`)
 
-Unified interface for calling any supported model provider via AI SDK. Handles:
+Unified interface for calling any supported model provider via Vercel AI SDK.
 
-- Provider routing (Anthropic, OpenAI, Google, etc.)
-- Tool call formatting (action mode, inquiry mode)
-- Response parsing (extract choice, reasoning, confidence)
-- Error categorization (transient → retry, refusal → record, fatal → fail)
+- **Provider registry** (`providers.ts`): Anthropic, OpenAI, Google, OpenRouter, Groq, Custom. Each provider maps to its AI SDK client factory.
+- **Model routing** (`llm.ts`): Models use `"provider/model"` format (e.g. `"anthropic/claude-sonnet-4-6"`). The `getModel()` function extracts the provider prefix, resolves the API key from env, and returns an AI SDK `LanguageModel` instance.
+- **Core functions**: `generateText()`, `generateObject()` (Zod schema → structured JSON), `streamText()`.
+- **Reasoning** (`reasoning.ts`): Extended thinking config per provider — Anthropic budget tokens, OpenAI reasoning effort, Google thinking levels.
+- **Integration with model_config table**: Benchmark runner constructs `${config.provider}/${config.modelId}` to route to the right provider. Temperature, topP, maxTokens come from the DB config.
 
 ### Experiment Runner (`lib/services/experiment-runner.ts`)
 
@@ -221,7 +229,7 @@ Only whitelisted emails can sign in. The whitelist is stored in the `allowed_ema
 
 ### Admin Management
 
-Admins manage the whitelist at `/dashboard/admin` via the API at `/api/admin/whitelist` (GET/POST/DELETE, all admin-gated).
+Admins manage the whitelist at `/admin` via the API at `/api/admin/whitelist` (GET/POST/DELETE, all admin-gated).
 
 ### Bootstrapping
 
@@ -244,7 +252,9 @@ Admins manage the whitelist at `/dashboard/admin` via the API at `/api/admin/whi
 | `NEXT_PUBLIC_APP_URL`| Yes      | Public app URL (client-side)       |
 | `ANTHROPIC_API_KEY`  | Yes*     | For Claude models                  |
 | `OPENAI_API_KEY`     | Yes*     | For OpenAI models                  |
-| `GOOGLE_AI_API_KEY`  | Yes*     | For Gemini models                  |
+| `GOOGLE_API_KEY`     | No       | For Gemini models (direct API)     |
+| `OPENROUTER_API_KEY` | No       | For OpenRouter gateway models      |
+| `GROQ_API_KEY`       | No       | For Groq fast inference            |
 
 *At least one model provider key required.
 

@@ -1,0 +1,95 @@
+/**
+ * LLM Provider Registry
+ *
+ * Maps provider IDs to AI SDK client factories.
+ * Direct providers (anthropic, openai, google) have native structured output support.
+ * Gateway providers (openrouter, groq) are for exotic/niche models.
+ */
+
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import type { LLMProvider, CustomProviderConfig } from "./types";
+
+export interface ProviderConfig {
+  createClient: (
+    apiKey: string,
+    customConfig?: CustomProviderConfig
+  ) =>
+    | ReturnType<typeof createOpenAICompatible>
+    | ReturnType<typeof createOpenAI>
+    | ReturnType<typeof createAnthropic>
+    | ReturnType<typeof createGoogleGenerativeAI>;
+  envVar: string | null;
+  supportsStructuredOutputs: boolean;
+}
+
+export const PROVIDER_REGISTRY: Record<LLMProvider, ProviderConfig> = {
+  anthropic: {
+    createClient: (apiKey: string) =>
+      createAnthropic({ apiKey }),
+    envVar: "ANTHROPIC_API_KEY",
+    supportsStructuredOutputs: true,
+  },
+
+  openai: {
+    createClient: (apiKey: string) => createOpenAI({ apiKey }),
+    envVar: "OPENAI_API_KEY",
+    supportsStructuredOutputs: true,
+  },
+
+  google: {
+    createClient: (apiKey: string) => createGoogleGenerativeAI({ apiKey }),
+    envVar: "GOOGLE_API_KEY",
+    supportsStructuredOutputs: true,
+  },
+
+  openrouter: {
+    createClient: (apiKey: string) =>
+      createOpenAICompatible({
+        name: "openrouter",
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey,
+        supportsStructuredOutputs: false,
+      }),
+    envVar: "OPENROUTER_API_KEY",
+    supportsStructuredOutputs: false,
+  },
+
+  groq: {
+    createClient: (apiKey: string) =>
+      createOpenAICompatible({
+        name: "groq",
+        baseURL: "https://api.groq.com/openai/v1",
+        apiKey,
+        supportsStructuredOutputs: false,
+      }),
+    envVar: "GROQ_API_KEY",
+    supportsStructuredOutputs: false,
+  },
+
+  custom: {
+    createClient: (apiKey: string, customConfig?: CustomProviderConfig) => {
+      if (!customConfig?.baseUrl) {
+        throw new Error("Custom provider requires baseUrl in customConfig");
+      }
+      return createOpenAICompatible({
+        name: "custom",
+        baseURL: customConfig.baseUrl,
+        apiKey,
+        supportsStructuredOutputs: false,
+      });
+    },
+    envVar: null,
+    supportsStructuredOutputs: false,
+  },
+};
+
+export function getProviderConfig(provider: LLMProvider): ProviderConfig {
+  const config = PROVIDER_REGISTRY[provider];
+  if (!config) {
+    throw new Error(`Unknown provider: ${provider}`);
+  }
+  return config;
+}

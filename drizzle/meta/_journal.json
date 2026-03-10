@@ -15,6 +15,13 @@
       "when": 1772970369084,
       "tag": "0001_burly_iron_man",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773156115434,
+      "tag": "0002_silly_rogue",
+      "breakpoints": true
     }
   ]
 }

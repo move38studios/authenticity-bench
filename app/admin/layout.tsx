@@ -2,10 +2,10 @@ import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { DashboardSidebar } from "@/components/dashboard/dashboard-sidebar";
-import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import { AdminHeader } from "@/components/admin/admin-header";
 
-export default async function DashboardLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -18,12 +18,16 @@ export default async function DashboardLayout({
     redirect("/sign-in");
   }
 
+  if (session.user.role !== "admin") {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="h-svh overflow-hidden">
       <SidebarProvider>
-        <DashboardSidebar user={session.user} />
+        <AdminSidebar user={session.user} />
         <SidebarInset className="max-h-svh overflow-hidden">
-          <DashboardHeader />
+          <AdminHeader />
           <main className="flex flex-1 flex-col gap-4 p-4 min-h-0 overflow-auto">
             {children}
           </main>

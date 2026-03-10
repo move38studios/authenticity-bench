@@ -1,29 +1,19 @@
 # Development Plan
 
-## Phase 1: Content Library
+## Phase 1: Content Library ✓ COMPLETE
 
 **Goal:** Researchers can create, edit, and browse all the raw materials needed to run experiments.
 
-### 1a. Database schema + CRUD APIs
+### Done
 
-- Add all content tables to `lib/db/schema.ts`: `model_config`, `dilemma`, `values_system`, `mental_technique`, `modifier`
-- Generate and apply migrations
-- Create API routes for each entity (GET list, GET by id, POST create, PATCH update, DELETE)
-- All routes require authenticated session
-
-### 1b. Library UI
-
-- `/dashboard/library/dilemmas` — list, create, edit dilemmas. Includes markdown editor for scenario text, JSON editor for options, tool definitions (action_tool, inquiry_tools). Filter by domain, public/private.
-- `/dashboard/library/values` — list, create, edit values systems. Markdown editor for content.
-- `/dashboard/library/techniques` — list, create, edit mental techniques. Markdown editor.
-- `/dashboard/library/modifiers` — list, create, edit modifiers.
-- `/dashboard/models` — manage model configurations (provider, model_id, temperature, etc.)
-- Shared `content-editor.tsx` component: markdown editing with preview, used across all content types.
-- Optional: "Generate with AI" button that uses a model to draft content (dilemmas, values docs, etc.) which the researcher then reviews and edits.
-
-### Deliverable
-
-Researcher can log in, populate the library with dilemmas, values systems, mental techniques, and modifiers, and configure model endpoints. No experiments yet.
+- Split schema: `lib/db/schema/auth.ts`, `content.ts`, `index.ts`
+- All 5 content tables: `model_config`, `dilemma`, `values_system`, `mental_technique`, `modifier`
+- CRUD API routes for all entities with Zod validation (`lib/api/schemas.ts`, `lib/api/helpers.ts`)
+- Library UI pages: dilemmas, values, techniques, modifiers, models — all with create/edit/delete
+- Reusable components: `content-list.tsx` (generic CRUD list), `markdown-content-form.tsx`
+- Sidebar navigation (shadcn sidebar pattern from steelframe): dashboard sidebar with library links, admin sidebar with separate layout at `/admin`
+- Sign-in page redirects to dashboard if already authenticated
+- LLM service layer (`lib/services/llm/`): multi-provider support via AI SDK — Anthropic, OpenAI, Google, OpenRouter, Groq, Custom. Includes `getModel()`, `generateText()`, `generateObject()`, `streamText()`, and extended reasoning config.
 
 ---
 
@@ -64,7 +54,7 @@ Researcher can configure a full experiment, understand the scope, and save it as
 
 - `lib/services/prompt-builder.ts` — assembles system prompt + user prompt from experiment config
 - `lib/services/noise.ts` — paraphrasing via fast model + framing jitter. Index 0 = original.
-- `lib/services/model-caller.ts` — unified model calling via AI SDK. Handles tool calls, response parsing, error categorization. All model responses are validated with Zod schemas to ensure structured data extraction.
+- `lib/services/llm/` — unified model calling via AI SDK (already built). Provider routing, structured output, streaming. All model responses validated with Zod schemas.
 - `lib/services/theory-extractor.ts` — in theory mode, the evaluated model responds in freeform text. A small fast LLM (e.g. Haiku) post-processes the response to extract the structured judgment: which choice was selected, the reasoning summary, and confidence. This keeps the evaluated model unconstrained while still producing structured data.
 - `lib/services/experiment-runner.ts` — orchestrator:
   - Expands experiment config into full judgment matrix

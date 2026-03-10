@@ -14,8 +14,14 @@
     "db:seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.58",
+    "@ai-sdk/google": "^3.0.43",
+    "@ai-sdk/openai": "^3.0.41",
+    "@ai-sdk/openai-compatible": "^2.0.35",
     "@better-auth/drizzle-adapter": "^1.5.4",
     "@neondatabase/serverless": "^1.0.2",
+    "@radix-ui/react-slot": "^1.2.4",
+    "ai": "^6.0.116",
     "better-auth": "^1.5.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -28,7 +34,8 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "resend": "^6.9.3",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
