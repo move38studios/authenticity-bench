@@ -1,0 +1,189 @@
+# Development Plan
+
+## Phase 1: Content Library
+
+**Goal:** Researchers can create, edit, and browse all the raw materials needed to run experiments.
+
+### 1a. Database schema + CRUD APIs
+
+- Add all content tables to `lib/db/schema.ts`: `model_config`, `dilemma`, `values_system`, `mental_technique`, `modifier`
+- Generate and apply migrations
+- Create API routes for each entity (GET list, GET by id, POST create, PATCH update, DELETE)
+- All routes require authenticated session
+
+### 1b. Library UI
+
+- `/dashboard/library/dilemmas` — list, create, edit dilemmas. Includes markdown editor for scenario text, JSON editor for options, tool definitions (action_tool, inquiry_tools). Filter by domain, public/private.
+- `/dashboard/library/values` — list, create, edit values systems. Markdown editor for content.
+- `/dashboard/library/techniques` — list, create, edit mental techniques. Markdown editor.
+- `/dashboard/library/modifiers` — list, create, edit modifiers.
+- `/dashboard/models` — manage model configurations (provider, model_id, temperature, etc.)
+- Shared `content-editor.tsx` component: markdown editing with preview, used across all content types.
+- Optional: "Generate with AI" button that uses a model to draft content (dilemmas, values docs, etc.) which the researcher then reviews and edits.
+
+### Deliverable
+
+Researcher can log in, populate the library with dilemmas, values systems, mental techniques, and modifiers, and configure model endpoints. No experiments yet.
+
+---
+
+## Phase 2: Experiment Configuration
+
+**Goal:** Researchers can configure a benchmark run and see the combinatorial estimate before executing.
+
+### 2a. Experiment schema
+
+- Add experiment tables: `experiment`, all junction tables, `experiment_combo`
+- Experiment CRUD API
+
+### 2b. Experiment builder UI
+
+Multi-step form at `/dashboard/experiments/new`:
+
+1. **Name & description** — basic info
+2. **Models** — select from configured model_configs
+3. **Dilemmas** — select specific dilemmas, or "random N from domain X"
+4. **Judgment modes** — checkboxes: theory, single-shot-action, inquiry-to-action
+5. **Values systems** — select which to test (+ always includes "none" baseline)
+6. **Mental techniques** — select which to include, auto-generates power set, allows pruning individual combos
+7. **Modifiers** — same as mental techniques (select, power set, prune)
+8. **Noise repeats** — slider/number input
+9. **Review** — shows the full combinatorial estimate with breakdown, estimated cost, estimated time. Confirm or go back and adjust.
+
+### Deliverable
+
+Researcher can configure a full experiment, understand the scope, and save it as a draft. No execution yet.
+
+---
+
+## Phase 3: Benchmark Execution
+
+**Goal:** Experiments can be run, with live progress tracking.
+
+### 3a. Core engine
+
+- `lib/services/prompt-builder.ts` — assembles system prompt + user prompt from experiment config
+- `lib/services/noise.ts` — paraphrasing via fast model + framing jitter. Index 0 = original.
+- `lib/services/model-caller.ts` — unified model calling via AI SDK. Handles tool calls, response parsing, error categorization. All model responses are validated with Zod schemas to ensure structured data extraction.
+- `lib/services/theory-extractor.ts` — in theory mode, the evaluated model responds in freeform text. A small fast LLM (e.g. Haiku) post-processes the response to extract the structured judgment: which choice was selected, the reasoning summary, and confidence. This keeps the evaluated model unconstrained while still producing structured data.
+- `lib/services/experiment-runner.ts` — orchestrator:
+  - Expands experiment config into full judgment matrix
+  - Creates `pending` judgment rows
+  - Executes with concurrency control + per-provider rate limits
+  - Retries transient errors, records refusals
+  - Updates progress counters
+
+### 3b. Judgment table + execution API
+
+- Add `judgment` table to schema with indexes
+- `POST /api/experiments/[id]/run` — kicks off execution
+- `GET /api/experiments/[id]/status` — returns progress (completed/total, ETA, errors)
+
+### 3c. Durable execution
+
+- Wire up durable workflow runtime (Vercel or Cloudflare) so long-running experiments survive serverless timeouts
+- Implement pause/resume capability
+
+### 3d. Live status UI
+
+- `/dashboard/experiments/[id]` — shows experiment status: progress bar, completed/total, error count, ETA
+- Auto-refreshes (polling or SSE)
+- Experiment list page shows status badges
+
+### Deliverable
+
+Researcher can run an experiment, watch it progress, see errors. Results accumulate in the database.
+
+---
+
+## Phase 4: Results & Analysis
+
+**Goal:** Researchers can understand experiment results through auto-generated reports and interactive chat.
+
+### 4a. Auto-analysis agent
+
+- `lib/services/analysis-agent.ts` — triggered on experiment completion
+- Uses AI SDK to run an agent with:
+  - Text-to-SQL tool (read-only queries against judgment data)
+  - Sandboxed code execution (E2B or Cloudflare Containers) for statistical analysis + chart generation
+- Produces a markdown report with:
+  - Summary statistics (per model, per values system, per mode)
+  - Self-coherence scores (noise variant agreement)
+  - Notable patterns and outliers
+  - Charts (choice distributions, confidence heatmaps, etc.)
+  - Hypotheses for interpretation
+- Stores report in `experiment.analysis_report`
+- Sends email notification to experimenter
+
+### 4b. Results UI
+
+- `/dashboard/experiments/[id]` (results tab) — renders the analysis report
+- Data export: download judgments as CSV or JSON
+- Browse individual judgments with full prompt + response
+
+### 4c. Interactive analysis chat
+
+- Chat interface on the experiment page
+- Agent has text-to-SQL access scoped to this experiment's data
+- Can run ad-hoc code in sandbox for custom analysis
+- Conversation history persisted per experiment
+
+### Deliverable
+
+Full loop: configure → run → get auto-analysis → dig deeper via chat → export data.
+
+---
+
+## Phase 5: Polish & Scale
+
+**Goal:** Production readiness.
+
+- Cost tracking and budget limits per experiment
+- Model provider API key management in UI (encrypted storage)
+- Experiment templates (save a config, re-run with different dilemmas)
+- Comparison view: side-by-side results across experiments
+- Public/private dilemma management (hide private dilemmas from public benchmark)
+- Audit logging
+- Performance optimization for large result sets
+- Deploy to Vercel with proper env config
+
+---
+
+## Implementation Notes
+
+### What to build vs. what to buy
+
+- **Markdown editor**: use an existing React markdown editor component (e.g. @uiw/react-md-editor or similar)
+- **Charts**: Recharts or similar, already works well with shadcn
+- **Validation**: Zod for all request/response schema validation and structured model output parsing
+- **AI SDK**: Vercel AI SDK for model calls — already supports Anthropic, OpenAI, Google
+- **Code sandbox**: E2B (hosted) or Cloudflare Containers — don't build our own
+
+### Schema management
+
+Schema is split by domain from the start:
+
+- `lib/db/schema/auth.ts` — user, session, account, verification, allowed_email (Better Auth tables)
+- `lib/db/schema/content.ts` — model_config, dilemma, values_system, mental_technique, modifier
+- `lib/db/schema/experiment.ts` — experiment, junction tables, experiment_combo, judgment
+- `lib/db/schema/index.ts` — re-exports everything
+
+Drizzle config points at `./lib/db/schema` directory via glob.
+
+### Validation
+
+Zod is used for:
+
+- API request body validation on all endpoints
+- Structured response parsing from model calls
+- Theory mode extraction (freeform → structured judgment)
+- Experiment config validation before execution
+
+### API patterns
+
+- All API routes follow REST conventions with consistent JSON response shapes
+- Zod schemas validate all request bodies
+- Return JSON, use standard HTTP status codes
+- Authenticated via Better Auth session (server-side `auth.api.getSession()`)
+- Admin routes additionally check role
+- Design routes with OpenAPI compatibility in mind: consistent resource naming, standard HTTP methods, typed request/response shapes. OpenAPI spec generation can be added later without refactoring (e.g. via next-swagger-doc or similar)
