@@ -15,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, Check, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 // =============================================================================
@@ -142,6 +142,7 @@ export default function NewExperimentPage() {
   }
   const [form, setForm] = useState<FormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState("");
 
   // Library data
@@ -233,6 +234,64 @@ export default function NewExperimentPage() {
       setError(err instanceof Error ? err.message : "Failed to create");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handlePreview() {
+    setError("");
+    setPreviewing(true);
+
+    try {
+      // Create experiment as draft
+      const body: Record<string, unknown> = {
+        name: form.name,
+        judgmentModes: form.judgmentModes,
+        noiseRepeats: form.noiseRepeats,
+        modelConfigIds: form.modelConfigIds,
+        dilemmaIds: form.dilemmaIds,
+        valuesSystemIds: form.valuesSystemIds,
+        mentalTechniqueIds: form.mentalTechniqueIds,
+        modifierIds: form.modifierIds,
+      };
+      if (form.description) body.description = form.description;
+      if (form.mentalTechniqueCombos)
+        body.mentalTechniqueCombos = form.mentalTechniqueCombos;
+      if (form.modifierCombos) body.modifierCombos = form.modifierCombos;
+
+      const res = await fetch("/api/experiments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "Failed to create experiment");
+        return;
+      }
+
+      const { data } = await res.json();
+      const experimentId = data.id;
+
+      // Generate preview token
+      const tokenRes = await fetch(
+        `/api/experiments/${experimentId}/preview-token`,
+        { method: "POST" }
+      );
+
+      if (!tokenRes.ok) {
+        setError("Failed to generate preview link");
+        return;
+      }
+
+      const { data: tokenData } = await tokenRes.json();
+      window.open(`/preview/${tokenData.previewToken}`, "_blank");
+      toast.success("Experiment saved as draft. Preview opened in new tab.");
+      router.push("/dashboard/experiments");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create preview");
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -643,6 +702,29 @@ export default function NewExperimentPage() {
               {error && (
                 <p className="text-sm text-destructive">{error}</p>
               )}
+
+              <div className="flex items-center gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={handlePreview}
+                  disabled={previewing || submitting}
+                >
+                  {previewing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Creating preview...
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 mr-2" />
+                      Launch Preview
+                    </>
+                  )}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Saves as draft &amp; opens a shareable preview link
+                </span>
+              </div>
             </div>
           )}
         </CardContent>

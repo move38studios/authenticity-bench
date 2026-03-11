@@ -15,6 +15,13 @@
       "when": 1773242664863,
       "tag": "0001_bumpy_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773243372805,
+      "tag": "0002_tearful_alice",
+      "breakpoints": true
     }
   ]
 }

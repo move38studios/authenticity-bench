@@ -41,6 +41,8 @@ export const experiment = pgTable("experiment", {
   createdBy: text("created_by").references(() => user.id, {
     onDelete: "set null",
   }),
+  // shareable preview link (no auth required)
+  previewToken: text("preview_token").unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
