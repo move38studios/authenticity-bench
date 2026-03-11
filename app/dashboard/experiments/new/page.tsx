@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Loader2, ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { toast } from "sonner";
 
 // =============================================================================
 // TYPES
@@ -132,7 +133,13 @@ function computeTotal(form: FormState) {
 
 export default function NewExperimentPage() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, _setStep] = useState(0);
+  const [maxStep, setMaxStep] = useState(0);
+
+  function setStep(s: number) {
+    _setStep(s);
+    setMaxStep((prev) => Math.max(prev, s));
+  }
   const [form, setForm] = useState<FormState>(initialForm);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -238,7 +245,7 @@ export default function NewExperimentPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">
           New Experiment
@@ -248,24 +255,43 @@ export default function NewExperimentPage() {
         </p>
       </div>
 
-      {/* Step indicator */}
-      <div className="flex gap-1 overflow-x-auto pb-2">
-        {STEPS.map((label, i) => (
-          <button
-            key={label}
-            onClick={() => i < step && setStep(i)}
-            disabled={i > step}
-            className={`
-              px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors
-              ${i === step ? "bg-primary text-primary-foreground" : ""}
-              ${i < step ? "bg-muted text-foreground cursor-pointer hover:bg-muted/80" : ""}
-              ${i > step ? "bg-muted/50 text-muted-foreground cursor-not-allowed" : ""}
-            `}
-          >
-            {i < step && <Check className="h-3 w-3 inline mr-1" />}
-            {label}
-          </button>
-        ))}
+      {/* Step indicator — compact on mobile, pills on desktop */}
+      <div>
+        {/* Mobile: compact progress */}
+        <div className="md:hidden space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-medium">{STEPS[step]}</span>
+            <span className="text-muted-foreground">
+              {step + 1} / {STEPS.length}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full bg-primary rounded-full transition-all duration-300"
+              style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Desktop: horizontal pills */}
+        <div className="hidden md:flex gap-1">
+          {STEPS.map((label, i) => (
+            <button
+              key={label}
+              onClick={() => i <= maxStep && setStep(i)}
+              disabled={i > maxStep}
+              className={`
+                px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors
+                ${i === step ? "bg-primary text-primary-foreground" : ""}
+                ${i !== step && i <= maxStep ? "bg-muted text-foreground cursor-pointer hover:bg-muted/80" : ""}
+                ${i > maxStep ? "bg-muted/50 text-muted-foreground cursor-not-allowed" : ""}
+              `}
+            >
+              {i < step && <Check className="h-3 w-3 inline mr-1" />}
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <Card>
@@ -531,18 +557,19 @@ export default function NewExperimentPage() {
               </div>
               <div className="flex items-center gap-4">
                 <Input
-                  type="number"
-                  min={1}
-                  max={20}
                   value={form.noiseRepeats}
-                  onChange={(e) =>
-                    update({
-                      noiseRepeats: Math.max(
-                        1,
-                        Math.min(20, parseInt(e.target.value) || 1)
-                      ),
-                    })
-                  }
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (e.target.value === "") {
+                      update({ noiseRepeats: 0 as unknown as number });
+                      return;
+                    }
+                    if (isNaN(val) || val < 1) {
+                      toast.error("Must be at least 1");
+                      return;
+                    }
+                    update({ noiseRepeats: val });
+                  }}
                   className="w-24"
                 />
                 <span className="text-sm text-muted-foreground">
@@ -562,8 +589,8 @@ export default function NewExperimentPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <ReviewStat label="Name" value={form.name} />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <ReviewStat label="Name" value={form.name} className="col-span-2" />
                 <ReviewStat
                   label="Models"
                   value={`${form.modelConfigIds.length}`}
@@ -575,10 +602,15 @@ export default function NewExperimentPage() {
                 <ReviewStat
                   label="Judgment Modes"
                   value={form.judgmentModes.join(", ")}
+                  className="col-span-2"
                 />
                 <ReviewStat
                   label="Values Systems"
                   value={`${form.valuesSystemIds.length} + baseline`}
+                />
+                <ReviewStat
+                  label="Noise Repeats"
+                  value={`${form.noiseRepeats}`}
                 />
                 <ReviewStat
                   label="Technique Combos"
@@ -587,10 +619,6 @@ export default function NewExperimentPage() {
                 <ReviewStat
                   label="Modifier Combos"
                   value={`${(form.modifierCombos ?? powerSet(form.modifierIds)).length}`}
-                />
-                <ReviewStat
-                  label="Noise Repeats"
-                  value={`${form.noiseRepeats}`}
                 />
               </div>
 
@@ -601,8 +629,14 @@ export default function NewExperimentPage() {
                 <div className="text-3xl font-mono font-bold text-primary mt-1">
                   {computeTotal(form).toLocaleString()}
                 </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {form.dilemmaIds.length} dilemmas × {form.modelConfigIds.length} models × {form.valuesSystemIds.length + 1} values × {(form.mentalTechniqueCombos ?? powerSet(form.mentalTechniqueIds)).length} technique combos × {(form.modifierCombos ?? powerSet(form.modifierIds)).length} modifier combos × {form.judgmentModes.length} modes × {form.noiseRepeats} repeats
+                <div className="text-xs text-muted-foreground mt-1 break-words">
+                  {form.dilemmaIds.length} dilemmas
+                  {" × "}{form.modelConfigIds.length} models
+                  {" × "}{form.valuesSystemIds.length + 1} values
+                  {" × "}{(form.mentalTechniqueCombos ?? powerSet(form.mentalTechniqueIds)).length} technique combos
+                  {" × "}{(form.modifierCombos ?? powerSet(form.modifierIds)).length} modifier combos
+                  {" × "}{form.judgmentModes.length} modes
+                  {" × "}{form.noiseRepeats} repeats
                 </div>
               </div>
 
@@ -825,7 +859,7 @@ function ComboStep({
                 key={i}
                 className="flex items-center justify-between gap-2 px-3 py-1.5 rounded bg-muted text-sm"
               >
-                <span>
+                <span className="truncate min-w-0">
                   {combo.length === 0 ? (
                     <span className="text-muted-foreground italic">
                       (none)
@@ -853,9 +887,9 @@ function ComboStep({
   );
 }
 
-function ReviewStat({ label, value }: { label: string; value: string }) {
+function ReviewStat({ label, value, className }: { label: string; value: string; className?: string }) {
   return (
-    <div className="rounded-md bg-muted px-3 py-2">
+    <div className={`rounded-md bg-muted px-3 py-2 ${className ?? ""}`}>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </div>

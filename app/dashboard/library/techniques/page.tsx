@@ -26,7 +26,7 @@ export default function TechniquesPage() {
           key: "description",
           label: "Description",
           render: (item) => (
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground truncate max-w-xs block">
               {item.description || "—"}
             </span>
           ),

@@ -81,7 +81,7 @@ export const createExperimentSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   judgmentModes: z.array(judgmentModeEnum).min(1),
-  noiseRepeats: z.number().int().min(1).max(20).optional().default(3),
+  noiseRepeats: z.number().int().min(1).optional().default(3),
   modelConfigIds: z.array(z.string()).min(1),
   dilemmaIds: z.array(z.string()).min(1),
   valuesSystemIds: z.array(z.string()).optional().default([]), // empty = none-only baseline
@@ -96,7 +96,7 @@ export const updateExperimentSchema = z.object({
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   judgmentModes: z.array(judgmentModeEnum).min(1).optional(),
-  noiseRepeats: z.number().int().min(1).max(20).optional(),
+  noiseRepeats: z.number().int().min(1).optional(),
   modelConfigIds: z.array(z.string()).min(1).optional(),
   dilemmaIds: z.array(z.string()).min(1).optional(),
   valuesSystemIds: z.array(z.string()).optional(),

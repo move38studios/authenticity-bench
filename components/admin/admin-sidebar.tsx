@@ -42,7 +42,8 @@ interface NavItem {
 const navItems: NavItem[] = [
   { title: "Email Whitelist", url: "/admin", icon: Users },
   { title: "API Keys", url: "/admin/api-keys", icon: KeyRound },
-  { title: "LLM Playground", url: "/admin/test", icon: FlaskConical },
+  { title: "LLM Playground", url: "/admin/test-llm", icon: FlaskConical },
+  { title: "Workflow Test", url: "/admin/test-workflow", icon: FlaskConical },
 ];
 
 export function AdminSidebar({ user }: AdminSidebarProps) {

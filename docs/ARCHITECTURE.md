@@ -10,13 +10,13 @@ A web application for running benchmarks across AI models to measure authenticit
 |------------------|-------------------------------------|
 | Framework        | Next.js 16 (App Router, Turbopack)  |
 | Language         | TypeScript                          |
-| Database         | Neon Postgres (serverless)          |
+| Database         | Neon Postgres (Pool driver)         |
 | ORM              | Drizzle ORM                         |
 | Auth             | Better Auth 1.5                     |
 | Email            | Resend                              |
 | UI               | shadcn/ui, Tailwind CSS v4          |
 | AI SDK           | Vercel AI SDK                       |
-| Background Jobs  | Vercel/Cloudflare durable workflows |
+| Background Jobs  | Vercel WDK (Workflow Development Kit)|
 | Code Execution   | E2B or Cloudflare Containers        |
 | Deployment       | Vercel                              |
 | Package Mgr      | pnpm                                |
@@ -29,18 +29,22 @@ authenticity-bench/
 │   ├── api/
 │   │   ├── auth/[...all]/route.ts        # Better Auth catch-all
 │   │   ├── admin/whitelist/route.ts      # Whitelist CRUD (admin-only)
+│   │   ├── admin/test-llm/route.ts      # LLM Playground API
+│   │   ├── admin/test-workflow/route.ts  # WDK workflow test API
+│   │   ├── admin/api-keys/route.ts      # API key management
 │   │   ├── models/                       # Model config CRUD
 │   │   ├── dilemmas/                     # Dilemma CRUD
 │   │   ├── values/                       # Values system CRUD
 │   │   ├── techniques/                   # Mental technique CRUD
 │   │   ├── modifiers/                    # Modifier CRUD
 │   │   ├── experiments/                  # Experiment CRUD + junction handling
-│   │   ├── generate/route.ts             # AI content generation endpoint
-│   │   └── admin/test/route.ts           # LLM Playground API
+│   │   └── generate/route.ts             # AI content generation endpoint
 │   ├── admin/
 │   │   ├── layout.tsx                    # Admin auth gate + admin sidebar
 │   │   ├── page.tsx                      # Admin: whitelist manager
-│   │   └── test/page.tsx                 # LLM Playground (test providers)
+│   │   ├── api-keys/page.tsx             # API key management
+│   │   ├── test-llm/page.tsx             # LLM Playground (test providers)
+│   │   └── test-workflow/page.tsx         # WDK workflow test page
 │   ├── dashboard/
 │   │   ├── layout.tsx                    # Session gate + dashboard sidebar
 │   │   ├── page.tsx                      # Overview dashboard
@@ -70,7 +74,7 @@ authenticity-bench/
 ├── components/
 │   ├── ui/                               # shadcn components (incl. sidebar)
 │   ├── admin/
-│   │   ├── admin-sidebar.tsx             # Admin sidebar (whitelist, LLM playground)
+│   │   ├── admin-sidebar.tsx             # Admin sidebar (whitelist, API keys, LLM playground, workflow test)
 │   │   └── admin-header.tsx              # Admin header with sidebar trigger
 │   ├── dashboard/
 │   │   ├── dashboard-sidebar.tsx         # Dashboard sidebar (library nav)
@@ -106,14 +110,18 @@ authenticity-bench/
 │       └── llm/
 │           ├── index.ts                  # Barrel exports
 │           ├── llm.ts                    # getModel, generateText, generateObject, streamText
-│           ├── providers.ts             # Provider registry (Anthropic, OpenAI, Google, OpenRouter)
+│           ├── providers.ts             # Provider registry (Anthropic, OpenAI, Google, OpenRouter, Groq)
+│           ├── api-key-store.ts         # DB-backed API key storage with AES encryption
 │           ├── reasoning.ts             # Extended thinking config per provider
 │           └── types.ts                 # LLMProvider, options, response types
+├── workflows/
+│   └── test-workflow.ts                  # WDK test workflow (validate, sleep, LLM call, parallel batch)
 ├── scripts/
-│   ├── seed.ts                           # Seed admin whitelist
+│   ├── seed.ts                           # Seed admin whitelist + promote to admin
 │   └── seed-models.ts                    # Seed 17 model configs from playground presets
 ├── drizzle/
 ├── proxy.ts                              # Next.js 16 proxy (protects /dashboard/*, /admin/*)
+├── next.config.ts                        # Wrapped with withWorkflow() for WDK
 ├── drizzle.config.ts
 └── components.json
 ```
@@ -144,7 +152,7 @@ authenticity-bench/
 
 ### Connection
 
-Uses `@neondatabase/serverless` with the HTTP driver (`neon-http`) — stateless, ideal for serverless/edge. Schema is passed to the drizzle instance for relational queries.
+Uses `@neondatabase/serverless` with the `Pool` driver (`neon-serverless`) — supports transactions, required for experiment creation. Schema is passed to the drizzle instance for relational queries.
 
 ### Tables
 
@@ -201,7 +209,7 @@ Unified interface for calling any supported model provider via Vercel AI SDK.
 - **Model routing** (`llm.ts`): Models use `"provider/model"` format (e.g. `"anthropic/claude-sonnet-4-6"`). The `getModel()` function extracts the provider prefix, resolves the API key from env, and returns an AI SDK `LanguageModel` instance.
 - **Core functions**: `generateText()`, `generateObject()` (Zod schema → structured JSON), `streamText()`.
 - **Reasoning** (`reasoning.ts`): Extended thinking config per provider — Anthropic budget tokens, OpenAI reasoning effort + summary, Google thinking levels, OpenRouter effort.
-- **LLM Playground** (`/admin/test`): Test any provider connection and response format without saving to DB. Supports text/structured modes, reasoning traces, and custom model IDs.
+- **LLM Playground** (`/admin/test-llm`): Test any provider connection and response format without saving to DB. Supports text/structured modes, reasoning traces, and custom model IDs.
 - **Integration with model_config table**: Benchmark runner constructs `${config.provider}/${config.modelId}` to route to the right provider. Temperature, topP, maxTokens come from the DB config.
 
 ### Experiment Runner (`lib/services/experiment-runner.ts`)
@@ -216,7 +224,7 @@ Orchestrates the full experiment lifecycle:
 6. Updates `experiment.completed_count` continuously
 7. Triggers analysis agent on completion
 
-Runs as a durable workflow (Vercel/Cloudflare) to survive serverless timeouts.
+Runs as a durable Vercel WDK workflow to survive serverless timeouts. Uses `"use workflow"` and `"use step"` directives for automatic durability, retries, and background execution.
 
 ### Analysis Agent (`lib/services/analysis-agent.ts`)
 
@@ -258,10 +266,9 @@ Admins manage the whitelist at `/admin` via the API at `/api/admin/whitelist` (G
 ### Bootstrapping
 
 1. Set `SEED_ADMIN_EMAIL` in `.env.local`
-2. Run `pnpm db:seed` to add the email to the whitelist
+2. Run `pnpm db:seed` to add the email to the whitelist and promote to admin (if user already exists)
 3. Sign in with that email
-4. Promote to admin: `UPDATE "user" SET role='admin' WHERE email='...'` (via Drizzle Studio or Neon console)
-5. From then on, manage the whitelist from the admin UI
+4. From then on, manage the whitelist from the admin UI
 
 ## Environment Variables
 

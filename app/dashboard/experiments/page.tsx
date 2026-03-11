@@ -19,6 +19,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Plus, Trash2 } from "lucide-react";
 
 interface Experiment {
@@ -97,67 +108,88 @@ export default function ExperimentsPage() {
               No experiments yet. Create one to get started.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Judgments</TableHead>
-                  <TableHead className="text-right">Progress</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-16" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Link
-                        href={`/dashboard/experiments/${item.id}`}
-                        className="font-medium hover:underline"
-                      >
-                        {item.name}
-                      </Link>
-                      {item.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-xs">
-                          {item.description}
-                        </p>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={statusColors[item.status] ?? ""}
-                      >
-                        {item.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {item.totalJudgments?.toLocaleString() ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      {item.status !== "draft"
-                        ? `${item.completedCount}/${item.totalJudgments ?? 0}`
-                        : "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(item.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      {item.status === "draft" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </TableCell>
+            <div className="overflow-x-auto -mx-6">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Judgments</TableHead>
+                    <TableHead className="text-right hidden sm:table-cell">Progress</TableHead>
+                    <TableHead className="hidden md:table-cell">Created</TableHead>
+                    <TableHead className="w-12" />
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell>
+                        <Link
+                          href={`/dashboard/experiments/${item.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          <span className="line-clamp-1">{item.name}</span>
+                        </Link>
+                        {item.description && (
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                            {item.description}
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={statusColors[item.status] ?? ""}
+                        >
+                          {item.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {item.totalJudgments?.toLocaleString() ?? "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm hidden sm:table-cell">
+                        {item.status !== "draft"
+                          ? `${item.completedCount}/${item.totalJudgments ?? 0}`
+                          : "—"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground hidden md:table-cell whitespace-nowrap">
+                        {new Date(item.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        {item.status === "draft" && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                  Delete Experiment?
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently delete &quot;{item.name}&quot; and all its configuration. This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDelete(item.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -34,33 +34,32 @@
 
 ---
 
-## Phase 3: Benchmark Execution
+## Phase 3: Benchmark Execution (In progress)
 
 **Goal:** Experiments can be run, with live progress tracking.
 
-### 3a. Core engine
+### 3a. Durable workflow infrastructure ✓ DONE
 
-- `lib/services/prompt-builder.ts` — assembles system prompt + user prompt from experiment config
-- `lib/services/noise.ts` — paraphrasing via fast model + framing jitter. Index 0 = original.
-- `lib/services/llm/` — unified model calling via AI SDK (already built). Provider routing, structured output, streaming. All model responses validated with Zod schemas.
-- `lib/services/theory-extractor.ts` — in theory mode, the evaluated model responds in freeform text. A small fast LLM (e.g. Haiku) post-processes the response to extract the structured judgment: which choice was selected, the reasoning summary, and confidence. This keeps the evaluated model unconstrained while still producing structured data.
-- `lib/services/experiment-runner.ts` — orchestrator:
-  - Expands experiment config into full judgment matrix
-  - Creates `pending` judgment rows
-  - Executes with concurrency control + per-provider rate limits
-  - Retries transient errors, records refusals
-  - Updates progress counters
+- Vercel WDK (`workflow` package) integrated — `next.config.ts` wrapped with `withWorkflow()`
+- `workflows/test-workflow.ts` — test workflow with 4 steps (validate, sleep, LLM call, parallel batch) verified working end-to-end
+- Admin test pages: `/admin/test-llm` (LLM Playground), `/admin/test-workflow` (WDK test)
+- WDK auto-selects Local World (in-memory queue + `.workflow-data/` JSON files) in dev, Vercel World (Vercel Queues + cloud storage) in production
 
-### 3b. Judgment table + execution API
+### 3b. Core engine
 
-- Add `judgment` table to schema with indexes
-- `POST /api/experiments/[id]/run` — kicks off execution
+- `lib/services/experiment/workflow.ts` — WDK workflow definition for experiment execution
+- `lib/services/experiment/planner.ts` — cartesian product generation, judgment row insertion
+- `lib/services/experiment/executor.ts` — per-provider batch execution with concurrency control
+- `lib/services/experiment/prompt-assembler.ts` — system/user prompt construction per mode
+- `lib/services/experiment/response-parser.ts` — extract choice/reasoning from LLM responses
+- `lib/services/experiment/paraphraser.ts` — scenario rewriting with noise injection
+- `lib/services/experiment/cost-estimator.ts` — rough cost estimation
+- See [EXECUTION_ENGINE.md](./EXECUTION_ENGINE.md) for full design
+
+### 3c. Execution API
+
+- `POST /api/experiments/[id]/run` — kicks off WDK workflow
 - `GET /api/experiments/[id]/status` — returns progress (completed/total, ETA, errors)
-
-### 3c. Durable execution
-
-- Wire up durable workflow runtime (Vercel or Cloudflare) so long-running experiments survive serverless timeouts
-- Implement pause/resume capability
 
 ### 3d. Live status UI
 
@@ -144,6 +143,7 @@ Schema is split by domain from the start:
 - `lib/db/schema/auth.ts` — user, session, account, verification, allowed_email (Better Auth tables)
 - `lib/db/schema/content.ts` — model_config, dilemma, values_system, mental_technique, modifier
 - `lib/db/schema/experiment.ts` — experiment, junction tables, experiment_combo, judgment
+- `lib/db/schema/provider-key.ts` — encrypted API key storage per provider
 - `lib/db/schema/index.ts` — re-exports everything
 
 Drizzle config points at `./lib/db/schema` directory via glob.
