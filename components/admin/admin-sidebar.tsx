@@ -6,6 +6,7 @@ import {
   Shield,
   Users,
   ArrowLeft,
+  FlaskConical,
 } from "lucide-react";
 import {
   Sidebar,
@@ -39,6 +40,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Email Whitelist", url: "/admin", icon: Users },
+  { title: "LLM Playground", url: "/admin/test", icon: FlaskConical },
 ];
 
 export function AdminSidebar({ user }: AdminSidebarProps) {

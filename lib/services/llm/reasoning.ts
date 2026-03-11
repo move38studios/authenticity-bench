@@ -8,15 +8,9 @@
 type ReasoningEffort = "low" | "medium" | "high";
 
 const ANTHROPIC_BUDGETS: Record<ReasoningEffort, number> = {
-  low: 4096,
-  medium: 10240,
-  high: 32768,
-};
-
-const GOOGLE_BUDGETS: Record<ReasoningEffort, number> = {
-  low: 4096,
-  medium: 12288,
-  high: 32768,
+  low: 5000,
+  medium: 16000,
+  high: 50000,
 };
 
 type JSONValue = null | string | number | boolean | JSONObject | JSONValue[];
@@ -37,35 +31,23 @@ export function getReasoningProviderOptions(
   const level = effort as ReasoningEffort;
 
   if (modelId.startsWith("anthropic/")) {
-    const budgetTokens = ANTHROPIC_BUDGETS[level];
-    if (!budgetTokens) return undefined;
     return {
       anthropic: {
-        thinking: { type: "enabled", budgetTokens },
+        thinking: { type: "enabled", budgetTokens: ANTHROPIC_BUDGETS[level] },
       },
     };
   }
 
   if (modelId.startsWith("openai/")) {
     return {
-      openai: { reasoningEffort: level },
+      openai: { reasoningEffort: level, reasoningSummary: "detailed" },
     };
   }
 
   if (modelId.startsWith("google/")) {
-    const isGemini3 = modelId.includes("gemini-3");
-    if (isGemini3) {
-      return {
-        google: {
-          thinkingConfig: { includeThoughts: true, thinkingLevel: level },
-        },
-      };
-    }
-    const thinkingBudget = GOOGLE_BUDGETS[level];
-    if (!thinkingBudget) return undefined;
     return {
       google: {
-        thinkingConfig: { includeThoughts: true, thinkingBudget },
+        thinkingConfig: { includeThoughts: true, thinkingLevel: level },
       },
     };
   }

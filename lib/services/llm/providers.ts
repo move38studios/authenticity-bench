@@ -10,6 +10,7 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LLMProvider, CustomProviderConfig } from "./types";
 
 export interface ProviderConfig {
@@ -20,7 +21,8 @@ export interface ProviderConfig {
     | ReturnType<typeof createOpenAICompatible>
     | ReturnType<typeof createOpenAI>
     | ReturnType<typeof createAnthropic>
-    | ReturnType<typeof createGoogleGenerativeAI>;
+    | ReturnType<typeof createGoogleGenerativeAI>
+    | ReturnType<typeof createOpenRouter>;
   envVar: string | null;
   supportsStructuredOutputs: boolean;
 }
@@ -47,14 +49,9 @@ export const PROVIDER_REGISTRY: Record<LLMProvider, ProviderConfig> = {
 
   openrouter: {
     createClient: (apiKey: string) =>
-      createOpenAICompatible({
-        name: "openrouter",
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey,
-        supportsStructuredOutputs: false,
-      }),
+      createOpenRouter({ apiKey, compatibility: "strict" }),
     envVar: "OPENROUTER_API_KEY",
-    supportsStructuredOutputs: false,
+    supportsStructuredOutputs: true,
   },
 
   groq: {
