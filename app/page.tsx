@@ -5,7 +5,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
       <div className="max-w-lg text-center space-y-6">
-        <h1 className="text-4xl font-serif font-semibold tracking-tight">
+        <h1 className="text-4xl font-semibold tracking-tight">
           Authenticity Bench
         </h1>
         <p className="text-muted-foreground text-lg leading-relaxed">

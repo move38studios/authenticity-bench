@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -17,30 +18,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trash2, Pencil } from "lucide-react";
+import { Pencil, Search } from "lucide-react";
+import Link from "next/link";
 
 interface ContentListProps<T> {
   title: string;
   description: string;
   apiPath: string;
+  /** Base path for detail pages, e.g. "/dashboard/library/values" */
+  detailPath: string;
   columns: { key: keyof T; label: string; render?: (value: T) => React.ReactNode }[];
+  /** Keys to search against for client-side filtering */
+  searchKeys?: (keyof T)[];
   renderCreateForm: (props: {
     onCreated: () => void;
-    editingItem: T | null;
-    onCancelEdit: () => void;
   }) => React.ReactNode;
+  /** Optional action buttons rendered next to the page title (e.g. Generate) */
+  renderActions?: (props: { onRefresh: () => void }) => React.ReactNode;
+}
+
+function stringify(val: unknown): string {
+  if (Array.isArray(val)) return val.join(" ");
+  return String(val ?? "");
 }
 
 export function ContentList<T extends { id: string }>({
   title,
   description,
   apiPath,
+  detailPath,
   columns,
+  searchKeys,
   renderCreateForm,
+  renderActions,
 }: ContentListProps<T>) {
   const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingItem, setEditingItem] = useState<T | null>(null);
+  const [search, setSearch] = useState("");
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -56,27 +70,28 @@ export function ContentList<T extends { id: string }>({
     fetchItems();
   }, [fetchItems]);
 
-  async function handleDelete(id: string) {
-    await fetch(`${apiPath}/${id}`, { method: "DELETE" });
-    await fetchItems();
-  }
+  const filteredItems = useMemo(() => {
+    if (!search.trim() || !searchKeys || searchKeys.length === 0) return items;
+    const lc = search.toLowerCase();
+    return items.filter((item) =>
+      searchKeys.some((k) => stringify(item[k]).toLowerCase().includes(lc))
+    );
+  }, [items, search, searchKeys]);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-serif font-semibold tracking-tight">
-          {title}
-        </h1>
-        <p className="text-muted-foreground mt-1">{description}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            {title}
+          </h1>
+          <p className="text-muted-foreground mt-1">{description}</p>
+        </div>
+        {renderActions && renderActions({ onRefresh: fetchItems })}
       </div>
 
       {renderCreateForm({
-        onCreated: () => {
-          fetchItems();
-          setEditingItem(null);
-        },
-        editingItem,
-        onCancelEdit: () => setEditingItem(null),
+        onCreated: fetchItems,
       })}
 
       <Card>
@@ -85,13 +100,28 @@ export function ContentList<T extends { id: string }>({
           <CardDescription>
             {loading
               ? "Loading..."
-              : `${items.length} ${items.length === 1 ? "item" : "items"}`}
+              : filteredItems.length === items.length
+                ? `${items.length} ${items.length === 1 ? "item" : "items"}`
+                : `${filteredItems.length} of ${items.length} items`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {items.length === 0 && !loading ? (
+        <CardContent className="space-y-4">
+          {searchKeys && searchKeys.length > 0 && (
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+          )}
+          {filteredItems.length === 0 && !loading ? (
             <p className="text-sm text-muted-foreground">
-              No items yet. Create one above.
+              {items.length === 0
+                ? "No items yet. Create one above."
+                : "No items match your search."}
             </p>
           ) : (
             <Table>
@@ -100,11 +130,11 @@ export function ContentList<T extends { id: string }>({
                   {columns.map((col) => (
                     <TableHead key={String(col.key)}>{col.label}</TableHead>
                   ))}
-                  <TableHead className="w-24" />
+                  <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <TableRow key={item.id}>
                     {columns.map((col) => (
                       <TableCell key={String(col.key)}>
@@ -114,22 +144,11 @@ export function ContentList<T extends { id: string }>({
                       </TableCell>
                     ))}
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingItem(item)}
-                        >
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`${detailPath}/${item.id}`}>
                           <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

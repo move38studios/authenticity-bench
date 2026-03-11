@@ -8,7 +8,7 @@ export function DashboardHeader() {
     <header className="sticky top-0 z-10 bg-background flex h-14 shrink-0 items-center gap-2 border-b px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mx-2 h-4" />
-      <span className="font-serif text-sm font-medium">
+      <span className="text-sm font-medium">
         Dashboard
       </span>
     </header>

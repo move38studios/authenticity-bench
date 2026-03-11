@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
   const effectiveTemperature = thinkingEnabled ? undefined : (temperature ?? 0.7);
 
   try {
-    const model = getModel(modelId);
+    const model = await getModel(modelId);
 
     if (mode === "structured") {
       let zodSchema: z.ZodType;

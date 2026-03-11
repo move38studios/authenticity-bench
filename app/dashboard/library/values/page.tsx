@@ -2,6 +2,7 @@
 
 import { ContentList } from "@/components/content-list";
 import { MarkdownContentForm } from "@/components/markdown-content-form";
+import { GenerateDialog } from "@/components/generate-dialog";
 
 interface ValuesSystem {
   id: string;
@@ -17,6 +18,8 @@ export default function ValuesPage() {
       title="Values Systems"
       description="Complete values frameworks injected into the model's system prompt."
       apiPath="/api/values"
+      detailPath="/dashboard/library/values"
+      searchKeys={["name", "description"]}
       columns={[
         { key: "name", label: "Name" },
         {
@@ -38,11 +41,24 @@ export default function ValuesPage() {
           ),
         },
       ]}
-      renderCreateForm={(props) => (
+      renderCreateForm={({ onCreated }) => (
         <MarkdownContentForm
           apiPath="/api/values"
           entityName="Values System"
-          {...props}
+          onCreated={onCreated}
+        />
+      )}
+      renderActions={({ onRefresh }) => (
+        <GenerateDialog
+          entityType="values_system"
+          entityLabel="Values Systems"
+          createApiPath="/api/values"
+          onGenerated={onRefresh}
+          mapToCreateBody={(item) => ({
+            name: item.name,
+            content: item.content,
+            description: item.description,
+          })}
         />
       )}
     />

@@ -26,7 +26,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
+import Link from "next/link";
 
 interface ModelConfig {
   id: string;
@@ -52,9 +53,8 @@ const PROVIDERS = [
 export default function ModelsPage() {
   const [items, setItems] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingItem, setEditingItem] = useState<ModelConfig | null>(null);
 
-  // Form state
+  // Create form state
   const [provider, setProvider] = useState("");
   const [modelId, setModelId] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -63,8 +63,6 @@ export default function ModelsPage() {
   const [maxTokens, setMaxTokens] = useState("4096");
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const isEditing = !!editingItem;
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -79,19 +77,6 @@ export default function ModelsPage() {
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
-
-  useEffect(() => {
-    if (editingItem) {
-      setProvider(editingItem.provider);
-      setModelId(editingItem.modelId);
-      setDisplayName(editingItem.displayName);
-      setTemperature(String(editingItem.temperature));
-      setTopP(editingItem.topP != null ? String(editingItem.topP) : "");
-      setMaxTokens(String(editingItem.maxTokens));
-    } else {
-      resetForm();
-    }
-  }, [editingItem]);
 
   function resetForm() {
     setProvider("");
@@ -117,11 +102,8 @@ export default function ModelsPage() {
     };
     if (topP) body.topP = parseFloat(topP);
 
-    const url = isEditing ? `/api/models/${editingItem.id}` : "/api/models";
-    const method = isEditing ? "PATCH" : "POST";
-
-    const res = await fetch(url, {
-      method,
+    const res = await fetch("/api/models", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -131,21 +113,15 @@ export default function ModelsPage() {
       setError(data.error ?? "Failed to save");
     } else {
       resetForm();
-      setEditingItem(null);
       await fetchItems();
     }
     setFormLoading(false);
   }
 
-  async function handleDelete(id: string) {
-    await fetch(`/api/models/${id}`, { method: "DELETE" });
-    await fetchItems();
-  }
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-serif font-semibold tracking-tight">
+        <h1 className="text-3xl font-semibold tracking-tight">
           Model Configurations
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -155,13 +131,11 @@ export default function ModelsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {isEditing ? "Edit Model" : "New Model Configuration"}
-          </CardTitle>
+          <CardTitle>New Model Configuration</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="provider">Provider</Label>
                 <Select value={provider} onValueChange={setProvider} required>
@@ -236,24 +210,9 @@ export default function ModelsPage() {
               </div>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="flex gap-2">
-              <Button type="submit" disabled={formLoading || !provider}>
-                {formLoading
-                  ? "Saving..."
-                  : isEditing
-                    ? "Update Model"
-                    : "Create Model"}
-              </Button>
-              {isEditing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setEditingItem(null)}
-                >
-                  Cancel
-                </Button>
-              )}
-            </div>
+            <Button type="submit" disabled={formLoading || !provider}>
+              {formLoading ? "Saving..." : "Create Model"}
+            </Button>
           </form>
         </CardContent>
       </Card>
@@ -281,7 +240,7 @@ export default function ModelsPage() {
                   <TableHead>Model ID</TableHead>
                   <TableHead>Temp</TableHead>
                   <TableHead>Max Tokens</TableHead>
-                  <TableHead className="w-24" />
+                  <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -307,22 +266,11 @@ export default function ModelsPage() {
                       {item.maxTokens.toLocaleString()}
                     </TableCell>
                     <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingItem(item)}
-                        >
+                      <Button variant="ghost" size="sm" asChild>
+                        <Link href={`/dashboard/library/models/${item.id}`}>
                           <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

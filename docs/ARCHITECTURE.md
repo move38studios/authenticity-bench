@@ -34,6 +34,8 @@ authenticity-bench/
 │   │   ├── values/                       # Values system CRUD
 │   │   ├── techniques/                   # Mental technique CRUD
 │   │   ├── modifiers/                    # Modifier CRUD
+│   │   ├── experiments/                  # Experiment CRUD + junction handling
+│   │   ├── generate/route.ts             # AI content generation endpoint
 │   │   └── admin/test/route.ts           # LLM Playground API
 │   ├── admin/
 │   │   ├── layout.tsx                    # Admin auth gate + admin sidebar
@@ -42,12 +44,25 @@ authenticity-bench/
 │   ├── dashboard/
 │   │   ├── layout.tsx                    # Session gate + dashboard sidebar
 │   │   ├── page.tsx                      # Overview dashboard
+│   │   ├── experiments/
+│   │   │   ├── page.tsx                  # Experiments list
+│   │   │   └── new/page.tsx              # 9-step experiment builder wizard
 │   │   └── library/
-│   │       ├── dilemmas/page.tsx         # Browse/create/edit dilemmas
-│   │       ├── values/page.tsx          # Browse/create/edit values systems
-│   │       ├── techniques/page.tsx      # Browse/create/edit mental techniques
-│   │       ├── modifiers/page.tsx       # Browse/create/edit modifiers
-│   │       └── models/page.tsx          # Model config management
+│   │       ├── dilemmas/
+│   │       │   ├── page.tsx              # List + create dilemmas
+│   │       │   └── [id]/page.tsx         # Edit dilemma detail
+│   │       ├── values/
+│   │       │   ├── page.tsx              # List + create values systems
+│   │       │   └── [id]/page.tsx         # Edit values detail
+│   │       ├── techniques/
+│   │       │   ├── page.tsx              # List + create techniques
+│   │       │   └── [id]/page.tsx         # Edit technique detail
+│   │       ├── modifiers/
+│   │       │   ├── page.tsx              # List + create modifiers
+│   │       │   └── [id]/page.tsx         # Edit modifier detail
+│   │       └── models/
+│   │           ├── page.tsx              # List + create models
+│   │           └── [id]/page.tsx         # Edit model detail
 │   ├── sign-in/page.tsx                  # Server component: redirects if signed in
 │   ├── page.tsx
 │   ├── layout.tsx
@@ -63,8 +78,10 @@ authenticity-bench/
 │   ├── sidebar-user-badge.tsx            # User dropdown in sidebar footer
 │   ├── sign-in-form.tsx                  # OTP sign-in form (client component)
 │   ├── whitelist-manager.tsx
-│   ├── content-list.tsx                  # Generic CRUD list component
-│   └── markdown-content-form.tsx         # Shared form for name+content+description entities
+│   ├── content-list.tsx                  # Generic list with detail page links
+│   ├── content-detail-page.tsx           # Shared edit/delete page for markdown entities
+│   ├── markdown-content-form.tsx         # Shared create form for name+content+description entities
+│   └── generate-dialog.tsx               # AI content generation dialog (any entity type)
 ├── hooks/
 │   └── use-mobile.ts                     # Mobile breakpoint detection
 ├── lib/
@@ -79,18 +96,22 @@ authenticity-bench/
 │   │   └── schema/
 │   │       ├── auth.ts                   # Better Auth tables + allowed_email
 │   │       ├── content.ts               # Content entity tables
+│   │       ├── experiment.ts            # Experiment, junctions, combos, judgment
 │   │       └── index.ts                 # Re-exports
 │   └── services/
 │       ├── email.ts                      # Resend wrapper (console.log in dev)
 │       ├── whitelist.ts                  # Email/domain whitelist checker
+│       ├── experiment/
+│       │   └── combos.ts                # Power set generation + total judgment computation
 │       └── llm/
 │           ├── index.ts                  # Barrel exports
 │           ├── llm.ts                    # getModel, generateText, generateObject, streamText
-│           ├── providers.ts             # Provider registry (Anthropic, OpenAI, Google, OpenRouter, Groq, Custom)
+│           ├── providers.ts             # Provider registry (Anthropic, OpenAI, Google, OpenRouter)
 │           ├── reasoning.ts             # Extended thinking config per provider
 │           └── types.ts                 # LLMProvider, options, response types
 ├── scripts/
-│   └── seed.ts
+│   ├── seed.ts                           # Seed admin whitelist
+│   └── seed-models.ts                    # Seed 17 model configs from playground presets
 ├── drizzle/
 ├── proxy.ts                              # Next.js 16 proxy (protects /dashboard/*, /admin/*)
 ├── drizzle.config.ts
@@ -133,8 +154,8 @@ See [DATA_MODEL.md](./DATA_MODEL.md) for full schema. Summary:
 |----------------|----------------------------------------------------------------------------|
 | Auth           | `user`, `session`, `account`, `verification`, `allowed_email`              |
 | Content        | `model_config`, `dilemma`, `values_system`, `mental_technique`, `modifier` |
-| Experiment     | `experiment`, junction tables (5), `experiment_combo`                      |
-| Results        | `judgment`                                                                 |
+| Experiment     | `experiment`, 5 junction tables, `experiment_combo`                        |
+| Results        | `judgment` (24 columns, 4 indexes)                                         |
 
 ### Migration Workflow
 

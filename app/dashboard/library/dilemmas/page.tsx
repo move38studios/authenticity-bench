@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,37 +20,59 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trash2, Pencil, Plus, X } from "lucide-react";
+import { Pencil, Plus, X, Search } from "lucide-react";
+import { GenerateDialog } from "@/components/generate-dialog";
+import Link from "next/link";
+
+interface DilemmaOption {
+  slug: string;
+  label: string;
+  description: string;
+  actionTool: { name: string; description: string } | null;
+}
 
 interface Dilemma {
   id: string;
   title: string;
   scenario: string;
   domain: string | null;
-  options: string[];
+  tags: string[];
+  options: DilemmaOption[];
   isPublic: boolean;
-  actionTool: Record<string, unknown> | null;
   inquiryTools: Record<string, unknown>[] | null;
   createdAt: string;
+}
+
+interface OptionFormState {
+  slug: string;
+  label: string;
+  description: string;
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 export default function DilemmasPage() {
   const [items, setItems] = useState<Dilemma[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingItem, setEditingItem] = useState<Dilemma | null>(null);
+  const [search, setSearch] = useState("");
 
-  // Form state
+  // Create form state
   const [title, setTitle] = useState("");
   const [scenario, setScenario] = useState("");
   const [domain, setDomain] = useState("");
-  const [options, setOptions] = useState<string[]>(["", ""]);
+  const [tagsInput, setTagsInput] = useState("");
+  const [options, setOptions] = useState<OptionFormState[]>([
+    { slug: "", label: "", description: "" },
+    { slug: "", label: "", description: "" },
+  ]);
   const [isPublic, setIsPublic] = useState(true);
-  const [actionToolJson, setActionToolJson] = useState("");
-  const [inquiryToolsJson, setInquiryToolsJson] = useState("");
   const [formLoading, setFormLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const isEditing = !!editingItem;
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -66,86 +88,67 @@ export default function DilemmasPage() {
     fetchItems();
   }, [fetchItems]);
 
-  useEffect(() => {
-    if (editingItem) {
-      setTitle(editingItem.title);
-      setScenario(editingItem.scenario);
-      setDomain(editingItem.domain ?? "");
-      setOptions(
-        editingItem.options.length >= 2
-          ? editingItem.options
-          : [...editingItem.options, "", ""].slice(0, 2)
-      );
-      setIsPublic(editingItem.isPublic);
-      setActionToolJson(
-        editingItem.actionTool
-          ? JSON.stringify(editingItem.actionTool, null, 2)
-          : ""
-      );
-      setInquiryToolsJson(
-        editingItem.inquiryTools
-          ? JSON.stringify(editingItem.inquiryTools, null, 2)
-          : ""
-      );
-    } else {
-      resetForm();
-    }
-  }, [editingItem]);
+  const filteredItems = useMemo(() => {
+    if (!search.trim()) return items;
+    const lc = search.toLowerCase();
+    return items.filter(
+      (item) =>
+        item.title.toLowerCase().includes(lc) ||
+        (item.domain ?? "").toLowerCase().includes(lc) ||
+        (item.tags ?? []).some((t) => t.toLowerCase().includes(lc))
+    );
+  }, [items, search]);
 
   function resetForm() {
     setTitle("");
     setScenario("");
     setDomain("");
-    setOptions(["", ""]);
+    setTagsInput("");
+    setOptions([
+      { slug: "", label: "", description: "" },
+      { slug: "", label: "", description: "" },
+    ]);
     setIsPublic(true);
-    setActionToolJson("");
-    setInquiryToolsJson("");
     setError("");
   }
 
-  function updateOption(index: number, value: string) {
-    setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));
-  }
-
-  function addOption() {
-    setOptions((prev) => [...prev, ""]);
-  }
-
-  function removeOption(index: number) {
-    if (options.length <= 2) return;
-    setOptions((prev) => prev.filter((_, i) => i !== index));
+  function updateOption(index: number, field: keyof OptionFormState, value: string) {
+    setOptions((prev) =>
+      prev.map((o, i) => {
+        if (i !== index) return o;
+        const updated = { ...o, [field]: value };
+        // Auto-generate slug from label
+        if (field === "label" && !o.slug) {
+          updated.slug = slugify(value);
+        }
+        return updated;
+      })
+    );
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    const filteredOptions = options.filter((o) => o.trim());
+    const filteredOptions = options.filter((o) => o.label.trim());
     if (filteredOptions.length < 2) {
       setError("At least 2 options are required");
       return;
     }
 
-    // Validate JSON fields if provided
-    let actionTool: Record<string, unknown> | undefined;
-    let inquiryTools: Record<string, unknown>[] | undefined;
+    // Ensure all options have slugs
+    const optionsWithSlugs = filteredOptions.map((o) => ({
+      slug: o.slug || slugify(o.label),
+      label: o.label.trim(),
+      description: o.description.trim() || o.label.trim(),
+      actionTool: null,
+    }));
 
-    if (actionToolJson.trim()) {
-      try {
-        actionTool = JSON.parse(actionToolJson);
-      } catch {
-        setError("Action Tool JSON is invalid");
-        return;
-      }
-    }
-
-    if (inquiryToolsJson.trim()) {
-      try {
-        inquiryTools = JSON.parse(inquiryToolsJson);
-      } catch {
-        setError("Inquiry Tools JSON is invalid");
-        return;
-      }
+    // Check slug uniqueness
+    const slugs = optionsWithSlugs.map((o) => o.slug);
+    if (new Set(slugs).size !== slugs.length) {
+      setError("Each option must have a unique slug");
+      return;
     }
 
     setFormLoading(true);
@@ -153,20 +156,18 @@ export default function DilemmasPage() {
     const body: Record<string, unknown> = {
       title,
       scenario,
-      options: filteredOptions,
+      options: optionsWithSlugs,
       isPublic,
     };
     if (domain) body.domain = domain;
-    if (actionTool) body.actionTool = actionTool;
-    if (inquiryTools) body.inquiryTools = inquiryTools;
+    const parsedTags = tagsInput
+      .split(",")
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (parsedTags.length > 0) body.tags = parsedTags;
 
-    const url = isEditing
-      ? `/api/dilemmas/${editingItem.id}`
-      : "/api/dilemmas";
-    const method = isEditing ? "PATCH" : "POST";
-
-    const res = await fetch(url, {
-      method,
+    const res = await fetch("/api/dilemmas", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
@@ -176,38 +177,46 @@ export default function DilemmasPage() {
       setError(data.error ?? "Failed to save");
     } else {
       resetForm();
-      setEditingItem(null);
       await fetchItems();
     }
     setFormLoading(false);
   }
 
-  async function handleDelete(id: string) {
-    await fetch(`/api/dilemmas/${id}`, { method: "DELETE" });
-    await fetchItems();
-  }
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-serif font-semibold tracking-tight">
-          Dilemmas
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Ethical scenarios presented to models. Each dilemma has multiple
-          response options.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Dilemmas
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Ethical scenarios presented to models. Each dilemma has multiple
+            response options.
+          </p>
+        </div>
+        <GenerateDialog
+          entityType="dilemma"
+          entityLabel="Dilemmas"
+          createApiPath="/api/dilemmas"
+          onGenerated={fetchItems}
+          mapToCreateBody={(item) => ({
+            title: item.title,
+            scenario: item.scenario,
+            domain: item.domain,
+            tags: item.tags,
+            options: item.options,
+            isPublic: true,
+          })}
+        />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {isEditing ? "Edit Dilemma" : "New Dilemma"}
-          </CardTitle>
+          <CardTitle>New Dilemma</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -230,6 +239,16 @@ export default function DilemmasPage() {
             </div>
 
             <div className="space-y-2">
+              <Label htmlFor="tags">Tags (optional, comma-separated)</Label>
+              <Input
+                id="tags"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                placeholder="e.g. autonomy, life-death, consent, deception"
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="scenario">Scenario (markdown)</Label>
               <Textarea
                 id="scenario"
@@ -242,26 +261,47 @@ export default function DilemmasPage() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>Response Options (minimum 2)</Label>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {options.map((opt, i) => (
-                  <div key={i} className="flex gap-2">
+                  <div key={i} className="rounded-lg border p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono text-muted-foreground">
+                        Option {i + 1}
+                      </span>
+                      {options.length > 2 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() =>
+                            setOptions((prev) => prev.filter((_, j) => j !== i))
+                          }
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={opt.label}
+                        onChange={(e) => updateOption(i, "label", e.target.value)}
+                        placeholder="Label (e.g. Report the colleague)"
+                      />
+                      <Input
+                        value={opt.slug}
+                        onChange={(e) => updateOption(i, "slug", e.target.value)}
+                        placeholder="Slug (auto-generated)"
+                        className="font-mono text-sm"
+                      />
+                    </div>
                     <Input
-                      value={opt}
-                      onChange={(e) => updateOption(i, e.target.value)}
-                      placeholder={`Option ${i + 1}`}
+                      value={opt.description}
+                      onChange={(e) => updateOption(i, "description", e.target.value)}
+                      placeholder="Description (optional, defaults to label)"
                     />
-                    {options.length > 2 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeOption(i)}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
                   </div>
                 ))}
               </div>
@@ -269,7 +309,12 @@ export default function DilemmasPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={addOption}
+                onClick={() =>
+                  setOptions((prev) => [
+                    ...prev,
+                    { slug: "", label: "", description: "" },
+                  ])
+                }
               >
                 <Plus className="h-4 w-4 mr-1" />
                 Add Option
@@ -289,52 +334,10 @@ export default function DilemmasPage() {
               </Label>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="actionTool">Action Tool JSON (optional)</Label>
-                <Textarea
-                  id="actionTool"
-                  value={actionToolJson}
-                  onChange={(e) => setActionToolJson(e.target.value)}
-                  placeholder='{"name": "decide", "parameters": {...}}'
-                  rows={4}
-                  className="font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="inquiryTools">
-                  Inquiry Tools JSON (optional)
-                </Label>
-                <Textarea
-                  id="inquiryTools"
-                  value={inquiryToolsJson}
-                  onChange={(e) => setInquiryToolsJson(e.target.value)}
-                  placeholder='[{"name": "ask_expert", "parameters": {...}}]'
-                  rows={4}
-                  className="font-mono text-xs"
-                />
-              </div>
-            </div>
-
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="flex gap-2">
-              <Button type="submit" disabled={formLoading}>
-                {formLoading
-                  ? "Saving..."
-                  : isEditing
-                    ? "Update Dilemma"
-                    : "Create Dilemma"}
-              </Button>
-              {isEditing && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setEditingItem(null)}
-                >
-                  Cancel
-                </Button>
-              )}
-            </div>
+            <Button type="submit" disabled={formLoading}>
+              {formLoading ? "Saving..." : "Create Dilemma"}
+            </Button>
           </form>
         </CardContent>
       </Card>
@@ -345,13 +348,26 @@ export default function DilemmasPage() {
           <CardDescription>
             {loading
               ? "Loading..."
-              : `${items.length} ${items.length === 1 ? "dilemma" : "dilemmas"}`}
+              : filteredItems.length === items.length
+                ? `${items.length} ${items.length === 1 ? "dilemma" : "dilemmas"}`
+                : `${filteredItems.length} of ${items.length} dilemmas`}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {items.length === 0 && !loading ? (
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by title, domain, or tags..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          {filteredItems.length === 0 && !loading ? (
             <p className="text-sm text-muted-foreground">
-              No dilemmas yet. Create one above.
+              {items.length === 0
+                ? "No dilemmas yet. Create one above."
+                : "No dilemmas match your search."}
             </p>
           ) : (
             <Table>
@@ -359,56 +375,84 @@ export default function DilemmasPage() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>Domain</TableHead>
+                  <TableHead>Tags</TableHead>
                   <TableHead>Options</TableHead>
-                  <TableHead>Visibility</TableHead>
-                  <TableHead className="w-24" />
+                  <TableHead>Inquiry Tools</TableHead>
+                  <TableHead className="w-16" />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.title}</TableCell>
-                    <TableCell>
-                      {item.domain ? (
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
-                          {item.domain}
+                {filteredItems.map((item) => {
+                  const hasActionTools = Array.isArray(item.options) &&
+                    item.options.every((o) => o.actionTool != null);
+                  const hasInquiryTools = Array.isArray(item.inquiryTools) &&
+                    item.inquiryTools.length > 0;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">{item.title}</TableCell>
+                      <TableCell>
+                        {item.domain ? (
+                          <span className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                            {item.domain}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {item.tags && item.tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {item.tags.slice(0, 3).map((tag) => (
+                              <span
+                                key={tag}
+                                className="rounded bg-muted px-1.5 py-0.5 text-xs"
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {item.tags.length > 3 && (
+                              <span className="text-xs text-muted-foreground">
+                                +{item.tags.length - 3}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {item.options.map((o) => (
+                            <span
+                              key={o.slug}
+                              className="text-xs bg-muted rounded px-1.5 py-0.5 font-mono"
+                            >
+                              {o.slug}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`text-xs ${hasInquiryTools ? "text-green-600" : "text-muted-foreground"}`}
+                        >
+                          {hasInquiryTools
+                            ? `${item.inquiryTools!.length} tools`
+                            : hasActionTools
+                              ? "Actions only"
+                              : "None"}
                         </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {item.options.length} options
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className={`text-xs ${item.isPublic ? "text-green-600" : "text-muted-foreground"}`}
-                      >
-                        {item.isPublic ? "Public" : "Private"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditingItem(item)}
-                        >
-                          <Pencil className="h-4 w-4" />
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="sm" asChild>
+                          <Link href={`/dashboard/library/dilemmas/${item.id}`}>
+                            <Pencil className="h-4 w-4" />
+                          </Link>
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           )}

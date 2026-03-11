@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -36,33 +36,17 @@ interface TestResult {
   modelId: string;
 }
 
-const PRESET_MODELS = [
-  { group: "Anthropic", models: [
-    { id: "anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5" },
-    { id: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-    { id: "anthropic/claude-opus-4.6", label: "Claude Opus 4.6" },
-  ]},
-  { group: "OpenAI", models: [
-    { id: "openai/gpt-4.1-nano", label: "GPT-4.1 Nano" },
-    { id: "openai/gpt-4.1-mini", label: "GPT-4.1 Mini" },
-    { id: "openai/gpt-5.4", label: "GPT-5.4" },
-    { id: "openai/o3-mini", label: "o3-mini" },
-    { id: "openai/o3", label: "o3" },
-  ]},
-  { group: "Google", models: [
-    { id: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
-    { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { id: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
-    { id: "google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro" },
-    { id: "google/gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite" },
-  ]},
-  { group: "OpenRouter", models: [
-    { id: "moonshotai/kimi-k2.5", label: "Kimi K2.5" },
-    { id: "qwen/qwen3.5-397b-a17b", label: "Qwen 3.5 397B" },
-    { id: "qwen/qwen3.5-35b-a3b", label: "Qwen 3.5 35B" },
-    { id: "qwen/qwen3-max-thinking", label: "Qwen 3 Max Thinking" },
-  ]},
-];
+interface ModelConfigRow {
+  id: string;
+  provider: string;
+  modelId: string;
+  displayName: string;
+}
+
+interface ModelGroup {
+  group: string;
+  models: { id: string; label: string }[];
+}
 
 const DEFAULT_SCHEMA = JSON.stringify(
   {
@@ -85,8 +69,20 @@ B) Talk to them privately first
 C) Ignore it — it's minor
 D) Start doing the same thing`;
 
+function groupModels(rows: ModelConfigRow[]): ModelGroup[] {
+  const map = new Map<string, { id: string; label: string }[]>();
+  for (const r of rows) {
+    const fullId = `${r.provider}/${r.modelId}`;
+    const group = r.provider.charAt(0).toUpperCase() + r.provider.slice(1);
+    if (!map.has(group)) map.set(group, []);
+    map.get(group)!.push({ id: fullId, label: r.displayName });
+  }
+  return Array.from(map.entries()).map(([group, models]) => ({ group, models }));
+}
+
 export default function TestPage() {
-  const [modelId, setModelId] = useState("anthropic/claude-haiku-4.5");
+  const [groups, setGroups] = useState<ModelGroup[]>([]);
+  const [modelId, setModelId] = useState("");
   const [customModelId, setCustomModelId] = useState("");
   const [useCustom, setUseCustom] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState(DEFAULT_SYSTEM_PROMPT);
@@ -98,6 +94,19 @@ export default function TestPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<TestResult | null>(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then((json) => {
+        const rows: ModelConfigRow[] = json.data ?? json;
+        const grouped = groupModels(rows);
+        setGroups(grouped);
+        if (grouped.length > 0 && grouped[0].models.length > 0) {
+          setModelId(grouped[0].models[0].id);
+        }
+      });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -141,7 +150,7 @@ export default function TestPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-serif font-semibold tracking-tight">
+        <h1 className="text-3xl font-semibold tracking-tight">
           LLM Playground
         </h1>
         <p className="text-muted-foreground mt-1">
@@ -179,10 +188,10 @@ export default function TestPage() {
                 ) : (
                   <Select value={modelId} onValueChange={setModelId}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select a model" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PRESET_MODELS.map((group) => (
+                      {groups.map((group) => (
                         <div key={group.group}>
                           <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
                             {group.group}

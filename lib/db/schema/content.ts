@@ -29,9 +29,9 @@ export const dilemma = pgTable("dilemma", {
   title: text("title").notNull(),
   scenario: text("scenario").notNull(),
   domain: text("domain"),
-  options: jsonb("options").notNull(),
+  tags: text("tags").array().notNull().default([]),
+  options: jsonb("options").notNull(), // DilemmaOption[] — structured options with slug, label, description, actionTool
   isPublic: boolean("is_public").notNull().default(true),
-  actionTool: jsonb("action_tool"),
   inquiryTools: jsonb("inquiry_tools"),
   createdBy: text("created_by").references(() => user.id, {
     onDelete: "set null",

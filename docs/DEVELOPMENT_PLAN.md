@@ -9,40 +9,28 @@
 - Split schema: `lib/db/schema/auth.ts`, `content.ts`, `index.ts`
 - All 5 content tables: `model_config`, `dilemma`, `values_system`, `mental_technique`, `modifier`
 - CRUD API routes for all entities with Zod validation (`lib/api/schemas.ts`, `lib/api/helpers.ts`)
-- Library UI pages: dilemmas, values, techniques, modifiers, models — all with create/edit/delete
-- Reusable components: `content-list.tsx` (generic CRUD list), `markdown-content-form.tsx`
-- Sidebar navigation (shadcn sidebar pattern from steelframe): dashboard sidebar with library links, admin sidebar with separate layout at `/admin`
+- Library UI: list pages with create forms + detail/edit pages at `[id]` URLs for all entities
+- Delete confirmation via AlertDialog on all detail pages
+- Reusable components: `content-list.tsx` (generic list with detail page links), `content-detail-page.tsx` (shared edit/delete for markdown entities), `markdown-content-form.tsx` (create form)
+- AI-powered content generation: `generate-dialog.tsx` + `/api/generate` endpoint — generate dilemmas, values, techniques, or modifiers with any configured model
+- Model seed script (`scripts/seed-models.ts`) — seeds 17 model configs from playground presets
+- Sidebar navigation (shadcn sidebar pattern from steelframe): dashboard sidebar with library links + experiments, admin sidebar with separate layout at `/admin`
 - Sign-in page redirects to dashboard if already authenticated
-- LLM service layer (`lib/services/llm/`): multi-provider support via AI SDK — Anthropic, OpenAI, Google, OpenRouter, Groq, Custom. Includes `getModel()`, `generateText()`, `generateObject()`, `streamText()`, and extended reasoning config.
+- LLM service layer (`lib/services/llm/`): multi-provider support via AI SDK — Anthropic, OpenAI, Google, OpenRouter. Includes `getModel()`, `generateText()`, `generateObject()`, `streamText()`, and extended reasoning config per provider (Anthropic budget tokens, OpenAI reasoning effort + summary, Google thinking levels).
 
 ---
 
-## Phase 2: Experiment Configuration
+## Phase 2: Experiment Configuration ✓ COMPLETE
 
 **Goal:** Researchers can configure a benchmark run and see the combinatorial estimate before executing.
 
-### 2a. Experiment schema
+### Done
 
-- Add experiment tables: `experiment`, all junction tables, `experiment_combo`
-- Experiment CRUD API
-
-### 2b. Experiment builder UI
-
-Multi-step form at `/dashboard/experiments/new`:
-
-1. **Name & description** — basic info
-2. **Models** — select from configured model_configs
-3. **Dilemmas** — select specific dilemmas, or "random N from domain X"
-4. **Judgment modes** — checkboxes: theory, single-shot-action, inquiry-to-action
-5. **Values systems** — select which to test (+ always includes "none" baseline)
-6. **Mental techniques** — select which to include, auto-generates power set, allows pruning individual combos
-7. **Modifiers** — same as mental techniques (select, power set, prune)
-8. **Noise repeats** — slider/number input
-9. **Review** — shows the full combinatorial estimate with breakdown, estimated cost, estimated time. Confirm or go back and adjust.
-
-### Deliverable
-
-Researcher can configure a full experiment, understand the scope, and save it as a draft. No execution yet.
+- Experiment schema: `experiment` table, 5 junction tables (`experiment_model_config`, `experiment_dilemma`, `experiment_values_system`, `experiment_mental_technique`, `experiment_modifier`), `experiment_combo`, `judgment` (24 columns, 4 indexes)
+- Experiment CRUD API: `GET/POST /api/experiments`, `GET/PATCH/DELETE /api/experiments/[id]` with full junction/combo handling in transactions
+- Combinatorial engine: `lib/services/experiment/combos.ts` — power set generation, total judgment computation
+- 9-step experiment builder wizard at `/dashboard/experiments/new` (Basics → Models → Dilemmas → Modes → Values → Techniques → Modifiers → Repeats → Review) with live combinatorial total
+- Experiments list page with status badges, judgment counts, progress
 
 ---
 

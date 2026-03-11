@@ -2,6 +2,7 @@
 
 import { ContentList } from "@/components/content-list";
 import { MarkdownContentForm } from "@/components/markdown-content-form";
+import { GenerateDialog } from "@/components/generate-dialog";
 
 interface MentalTechnique {
   id: string;
@@ -17,6 +18,8 @@ export default function TechniquesPage() {
       title="Mental Techniques"
       description="Thinking approaches injected into the system prompt. Can be combined."
       apiPath="/api/techniques"
+      detailPath="/dashboard/library/techniques"
+      searchKeys={["name", "description"]}
       columns={[
         { key: "name", label: "Name" },
         {
@@ -38,11 +41,24 @@ export default function TechniquesPage() {
           ),
         },
       ]}
-      renderCreateForm={(props) => (
+      renderCreateForm={({ onCreated }) => (
         <MarkdownContentForm
           apiPath="/api/techniques"
           entityName="Mental Technique"
-          {...props}
+          onCreated={onCreated}
+        />
+      )}
+      renderActions={({ onRefresh }) => (
+        <GenerateDialog
+          entityType="mental_technique"
+          entityLabel="Techniques"
+          createApiPath="/api/techniques"
+          onGenerated={onRefresh}
+          mapToCreateBody={(item) => ({
+            name: item.name,
+            content: item.content,
+            description: item.description,
+          })}
         />
       )}
     />

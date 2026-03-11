@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1772969813698,
-      "tag": "0000_even_eddie_brock",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1772970369084,
-      "tag": "0001_burly_iron_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1773156115434,
-      "tag": "0002_silly_rogue",
+      "when": 1773231690544,
+      "tag": "0000_slimy_scarlet_witch",
       "breakpoints": true
     }
   ]

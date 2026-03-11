@@ -23,7 +23,6 @@ export interface ProviderConfig {
     | ReturnType<typeof createAnthropic>
     | ReturnType<typeof createGoogleGenerativeAI>
     | ReturnType<typeof createOpenRouter>;
-  envVar: string | null;
   supportsStructuredOutputs: boolean;
 }
 
@@ -31,39 +30,23 @@ export const PROVIDER_REGISTRY: Record<LLMProvider, ProviderConfig> = {
   anthropic: {
     createClient: (apiKey: string) =>
       createAnthropic({ apiKey }),
-    envVar: "ANTHROPIC_API_KEY",
     supportsStructuredOutputs: true,
   },
 
   openai: {
     createClient: (apiKey: string) => createOpenAI({ apiKey }),
-    envVar: "OPENAI_API_KEY",
     supportsStructuredOutputs: true,
   },
 
   google: {
     createClient: (apiKey: string) => createGoogleGenerativeAI({ apiKey }),
-    envVar: "GOOGLE_API_KEY",
     supportsStructuredOutputs: true,
   },
 
   openrouter: {
     createClient: (apiKey: string) =>
       createOpenRouter({ apiKey, compatibility: "strict" }),
-    envVar: "OPENROUTER_API_KEY",
     supportsStructuredOutputs: true,
-  },
-
-  groq: {
-    createClient: (apiKey: string) =>
-      createOpenAICompatible({
-        name: "groq",
-        baseURL: "https://api.groq.com/openai/v1",
-        apiKey,
-        supportsStructuredOutputs: false,
-      }),
-    envVar: "GROQ_API_KEY",
-    supportsStructuredOutputs: false,
   },
 
   custom: {
@@ -78,7 +61,6 @@ export const PROVIDER_REGISTRY: Record<LLMProvider, ProviderConfig> = {
         supportsStructuredOutputs: false,
       });
     },
-    envVar: null,
     supportsStructuredOutputs: false,
   },
 };

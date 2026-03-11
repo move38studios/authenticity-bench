@@ -2,6 +2,7 @@
 
 import { ContentList } from "@/components/content-list";
 import { MarkdownContentForm } from "@/components/markdown-content-form";
+import { GenerateDialog } from "@/components/generate-dialog";
 
 interface Modifier {
   id: string;
@@ -17,6 +18,8 @@ export default function ModifiersPage() {
       title="Modifiers"
       description="Prompt modifiers that change perceived stakes or dynamics. Can be combined."
       apiPath="/api/modifiers"
+      detailPath="/dashboard/library/modifiers"
+      searchKeys={["name", "description"]}
       columns={[
         { key: "name", label: "Name" },
         {
@@ -38,11 +41,24 @@ export default function ModifiersPage() {
           ),
         },
       ]}
-      renderCreateForm={(props) => (
+      renderCreateForm={({ onCreated }) => (
         <MarkdownContentForm
           apiPath="/api/modifiers"
           entityName="Modifier"
-          {...props}
+          onCreated={onCreated}
+        />
+      )}
+      renderActions={({ onRefresh }) => (
+        <GenerateDialog
+          entityType="modifier"
+          entityLabel="Modifiers"
+          createApiPath="/api/modifiers"
+          onGenerated={onRefresh}
+          mapToCreateBody={(item) => ({
+            name: item.name,
+            content: item.content,
+            description: item.description,
+          })}
         />
       )}
     />

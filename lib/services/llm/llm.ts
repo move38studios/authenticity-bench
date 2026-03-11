@@ -23,6 +23,7 @@ import type {
   ObjectResponse,
 } from "./types";
 import { getProviderConfig } from "./providers";
+import { getActiveApiKey } from "./api-key-store";
 
 // =============================================================================
 // MODEL ID NORMALIZATION
@@ -54,7 +55,12 @@ const MODEL_ID_MAP: Record<string, string> = {
 };
 
 function normalizeModelId(modelId: string, provider: LLMProvider): string {
-  if (provider === "openrouter" || provider === "groq" || provider === "custom") {
+  if (provider === "openrouter" || provider === "custom") {
+    // Strip the provider prefix (e.g. "openrouter/moonshotai/kimi-k2.5" → "moonshotai/kimi-k2.5")
+    const prefixes = ["openrouter/", "custom/"];
+    for (const p of prefixes) {
+      if (modelId.startsWith(p)) return modelId.slice(p.length);
+    }
     return modelId;
   }
   if (MODEL_ID_MAP[modelId]) {
@@ -70,7 +76,9 @@ function normalizeModelId(modelId: string, provider: LLMProvider): string {
 // PROVIDER ROUTING
 // =============================================================================
 
-function extractProviderFromModelId(modelId: string): LLMProvider {
+async function extractProviderFromModelId(
+  modelId: string
+): Promise<LLMProvider> {
   if (!modelId.includes("/")) {
     return "openrouter";
   }
@@ -82,24 +90,22 @@ function extractProviderFromModelId(modelId: string): LLMProvider {
       return "anthropic";
     case "openai":
       return "openai";
-    case "google":
-      return process.env.GOOGLE_API_KEY ? "google" : "openrouter";
-    case "groq":
-      return "groq";
+    case "google": {
+      const dbKey = await getActiveApiKey("google");
+      return dbKey ? "google" : "openrouter";
+    }
     default:
       return "openrouter";
   }
 }
 
-function getApiKey(envVar: string | null): string {
-  if (!envVar) {
-    throw new Error("Provider requires API key but no env var configured");
-  }
-  const apiKey = process.env[envVar];
-  if (!apiKey) {
-    throw new Error(`${envVar} environment variable is not set`);
-  }
-  return apiKey;
+async function getApiKey(provider: LLMProvider): Promise<string> {
+  const dbKey = await getActiveApiKey(provider);
+  if (dbKey) return dbKey;
+
+  throw new Error(
+    `No API key configured for provider "${provider}". Add one in Admin → API Keys.`
+  );
 }
 
 // =============================================================================
@@ -109,10 +115,10 @@ function getApiKey(envVar: string | null): string {
 /**
  * Get an AI SDK model instance from a "provider/model" ID.
  */
-export function getModel(modelId: string): LanguageModel {
-  const provider = extractProviderFromModelId(modelId);
+export async function getModel(modelId: string): Promise<LanguageModel> {
+  const provider = await extractProviderFromModelId(modelId);
   const providerConfig = getProviderConfig(provider);
-  const apiKey = getApiKey(providerConfig.envVar);
+  const apiKey = await getApiKey(provider);
   const client = providerConfig.createClient(apiKey);
   const nativeModelId = normalizeModelId(modelId, provider);
 
@@ -133,7 +139,7 @@ export async function generateText(
     systemPrompt,
   } = options;
 
-  const model = getModel(modelId);
+  const model = await getModel(modelId);
 
   const result = await aiGenerateText({
     model,
@@ -173,7 +179,7 @@ export async function generateObject<T extends z.ZodType>(
     schemaDescription = "Generated response object",
   } = options;
 
-  const model = getModel(modelId);
+  const model = await getModel(modelId);
 
   const result = await aiGenerateObject({
     model,
@@ -214,7 +220,7 @@ export async function streamText(
     onChunk,
   } = options;
 
-  const model = getModel(modelId);
+  const model = await getModel(modelId);
 
   const result = aiStreamText({
     model,

@@ -83,7 +83,7 @@ export function SignInForm() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-serif">
+          <CardTitle className="text-2xl">
             Authenticity Bench
           </CardTitle>
           <CardDescription>
