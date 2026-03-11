@@ -259,10 +259,11 @@ CREATE TABLE judgment (
   user_prompt           TEXT,                                           -- paraphrased dilemma text sent to model
   -- model response
   status                TEXT NOT NULL DEFAULT 'pending',               -- 'pending', 'running', 'completed', 'refused', 'error'
-  choice                TEXT,                                           -- the action/choice the model made
-  reasoning             TEXT,                                           -- the model's reasoning
-  confidence            REAL,                                           -- 0-1 confidence score
-  conversation_log      JSONB,                                          -- full message transcript (all turns, all roles)
+  refusal_type          TEXT,                                           -- 'none', 'hard', 'soft', 'conditional' (see EXECUTION_ENGINE.md)
+  choice                TEXT,                                           -- the action/choice the model made (option slug)
+  reasoning             TEXT,                                           -- the model's reasoning (extracted by theory extractor or from tool params)
+  confidence            REAL,                                           -- 0-1 confidence score (inferred by theory extractor in theory mode)
+  conversation_log      JSONB,                                          -- full message transcript [{role, content, toolCalls?, toolResults?}]
   raw_response          JSONB,                                          -- the final assistant response (containing the choice)
   inquiry_tool_calls    JSONB,                                          -- structured summary of inquiry calls [{turn, name, params, responsePreview}]
   error_message         TEXT,                                           -- error or refusal message if applicable

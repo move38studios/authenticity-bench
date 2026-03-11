@@ -45,23 +45,30 @@
 - Admin test pages: `/admin/test-llm` (LLM Playground), `/admin/test-workflow` (WDK test)
 - WDK auto-selects Local World (in-memory queue + `.workflow-data/` JSON files) in dev, Vercel World (Vercel Queues + cloud storage) in production
 
-### 3b. Core engine
+### 3b. Theory extraction and refusal taxonomy ✓ DONE
+
+- `lib/services/experiment/types.ts` — shared types (RefusalType, JudgmentMode, TheoryExtraction, DilemmaOption, ConversationMessage)
+- `lib/services/experiment/theory-extractor.ts` — Haiku-based extraction of choice, reasoning, confidence, and refusal type from free-text theory-mode responses
+- Refusal taxonomy: API-level, hard, soft, conditional — tracked via `refusal_type` column on judgment table
+- Schema updated: `refusal_type` and `conversation_log` columns added to judgment
+
+### 3c. Core engine
 
 - `lib/services/experiment/workflow.ts` — WDK workflow definition for experiment execution
 - `lib/services/experiment/planner.ts` — cartesian product generation, judgment row insertion
 - `lib/services/experiment/executor.ts` — per-provider batch execution with concurrency control
 - `lib/services/experiment/prompt-assembler.ts` — system/user prompt construction per mode
-- `lib/services/experiment/response-parser.ts` — extract choice/reasoning from LLM responses
+- `lib/services/experiment/response-parser.ts` — extract choice/reasoning from action-mode tool calls
 - `lib/services/experiment/paraphraser.ts` — scenario rewriting with noise injection
 - `lib/services/experiment/cost-estimator.ts` — rough cost estimation
 - See [EXECUTION_ENGINE.md](./EXECUTION_ENGINE.md) for full design
 
-### 3c. Execution API
+### 3d. Execution API
 
 - `POST /api/experiments/[id]/run` — kicks off WDK workflow
 - `GET /api/experiments/[id]/status` — returns progress (completed/total, ETA, errors)
 
-### 3d. Live status UI
+### 3e. Live status UI
 
 - `/dashboard/experiments/[id]` — shows experiment status: progress bar, completed/total, error count, ETA
 - Auto-refreshes (polling or SSE)

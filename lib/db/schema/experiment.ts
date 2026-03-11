@@ -154,9 +154,11 @@ export const judgment = pgTable(
     userPrompt: text("user_prompt"),
     // model response
     status: text("status").notNull().default("pending"), // pending, running, completed, refused, error
+    refusalType: text("refusal_type"), // none, hard, soft, conditional
     choice: text("choice"),
     reasoning: text("reasoning"),
     confidence: real("confidence"),
+    conversationLog: jsonb("conversation_log"), // full message transcript [{role, content, toolCalls?, toolResults?}]
     rawResponse: jsonb("raw_response"),
     inquiryToolCalls: jsonb("inquiry_tool_calls"),
     errorMessage: text("error_message"),
