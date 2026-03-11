@@ -33,10 +33,12 @@ authenticity-bench/
 │   │   ├── dilemmas/                     # Dilemma CRUD
 │   │   ├── values/                       # Values system CRUD
 │   │   ├── techniques/                   # Mental technique CRUD
-│   │   └── modifiers/                    # Modifier CRUD
+│   │   ├── modifiers/                    # Modifier CRUD
+│   │   └── admin/test/route.ts           # LLM Playground API
 │   ├── admin/
 │   │   ├── layout.tsx                    # Admin auth gate + admin sidebar
-│   │   └── page.tsx                      # Admin: whitelist manager
+│   │   ├── page.tsx                      # Admin: whitelist manager
+│   │   └── test/page.tsx                 # LLM Playground (test providers)
 │   ├── dashboard/
 │   │   ├── layout.tsx                    # Session gate + dashboard sidebar
 │   │   ├── page.tsx                      # Overview dashboard
@@ -53,7 +55,7 @@ authenticity-bench/
 ├── components/
 │   ├── ui/                               # shadcn components (incl. sidebar)
 │   ├── admin/
-│   │   ├── admin-sidebar.tsx             # Admin sidebar (whitelist nav)
+│   │   ├── admin-sidebar.tsx             # Admin sidebar (whitelist, LLM playground)
 │   │   └── admin-header.tsx              # Admin header with sidebar trigger
 │   ├── dashboard/
 │   │   ├── dashboard-sidebar.tsx         # Dashboard sidebar (library nav)
@@ -177,7 +179,8 @@ Unified interface for calling any supported model provider via Vercel AI SDK.
 - **Provider registry** (`providers.ts`): Anthropic, OpenAI, Google, OpenRouter, Groq, Custom. Each provider maps to its AI SDK client factory.
 - **Model routing** (`llm.ts`): Models use `"provider/model"` format (e.g. `"anthropic/claude-sonnet-4-6"`). The `getModel()` function extracts the provider prefix, resolves the API key from env, and returns an AI SDK `LanguageModel` instance.
 - **Core functions**: `generateText()`, `generateObject()` (Zod schema → structured JSON), `streamText()`.
-- **Reasoning** (`reasoning.ts`): Extended thinking config per provider — Anthropic budget tokens, OpenAI reasoning effort, Google thinking levels.
+- **Reasoning** (`reasoning.ts`): Extended thinking config per provider — Anthropic budget tokens, OpenAI reasoning effort + summary, Google thinking levels, OpenRouter effort.
+- **LLM Playground** (`/admin/test`): Test any provider connection and response format without saving to DB. Supports text/structured modes, reasoning traces, and custom model IDs.
 - **Integration with model_config table**: Benchmark runner constructs `${config.provider}/${config.modelId}` to route to the right provider. Temperature, topP, maxTokens come from the DB config.
 
 ### Experiment Runner (`lib/services/experiment-runner.ts`)
