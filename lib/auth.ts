@@ -4,7 +4,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { createAuthMiddleware, APIError } from "better-auth/api";
 import { db } from "@/lib/db";
 import { sendEmail } from "@/lib/services/email";
-import { isEmailAllowed } from "@/lib/services/whitelist";
+import { isEmailAllowed, shouldMakeAdmin } from "@/lib/services/whitelist";
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
@@ -12,6 +12,17 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: false,
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (user.email && (await shouldMakeAdmin(user.email))) {
+            return { data: { ...user, role: "admin" } };
+          }
+        },
+      },
+    },
   },
   hooks: {
     before: createAuthMiddleware(async (ctx) => {

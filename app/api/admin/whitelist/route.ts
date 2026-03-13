@@ -36,7 +36,11 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { email, domain } = body as { email?: string; domain?: string };
+  const { email, domain, makeAdmin } = body as {
+    email?: string;
+    domain?: string;
+    makeAdmin?: boolean;
+  };
 
   if (!email && !domain) {
     return NextResponse.json(
@@ -51,6 +55,7 @@ export async function POST(request: Request) {
       id: randomUUID(),
       email: email || null,
       domain: domain || null,
+      makeAdmin: email ? (makeAdmin ?? false) : false,
       createdBy: session.user.id,
     })
     .returning();

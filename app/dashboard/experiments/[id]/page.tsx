@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { useState } from "react";
+import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Card,
@@ -24,55 +22,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import {
-  ArrowLeft,
-  Play,
-  Pause,
-  Square,
-  RotateCcw,
-  Loader2,
-} from "lucide-react";
+import { Play, Pause, Square, RotateCcw } from "lucide-react";
+import { useExperiment } from "./layout";
 
 // =============================================================================
-// TYPES
+// LABELS
 // =============================================================================
-
-interface ExperimentData {
-  id: string;
-  name: string;
-  description: string | null;
-  status: string;
-  judgmentModes: string[];
-  noiseRepeats: number;
-  totalJudgments: number | null;
-  completedCount: number;
-  failedCount: number;
-  startedAt: string | null;
-  finishedAt: string | null;
-  analysisStatus: string | null;
-  modelConfigIds: string[];
-  dilemmaIds: string[];
-  valuesSystemIds: string[];
-  mentalTechniqueIds: string[];
-  modifierIds: string[];
-  createdAt: string;
-}
-
-// =============================================================================
-// STATUS DISPLAY
-// =============================================================================
-
-const statusConfig: Record<
-  string,
-  { color: string; label: string }
-> = {
-  draft: { color: "bg-muted text-muted-foreground", label: "Draft" },
-  running: { color: "bg-blue-100 text-blue-800", label: "Running" },
-  paused: { color: "bg-amber-100 text-amber-800", label: "Paused" },
-  completed: { color: "bg-green-100 text-green-800", label: "Completed" },
-  failed: { color: "bg-red-100 text-red-800", label: "Failed" },
-  cancelled: { color: "bg-muted text-muted-foreground", label: "Cancelled" },
-};
 
 const modeLabels: Record<string, string> = {
   theory: "Theory",
@@ -84,96 +39,30 @@ const modeLabels: Record<string, string> = {
 // COMPONENT
 // =============================================================================
 
-export default function ExperimentDetailPage() {
+export default function ExperimentOverviewPage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
-  const [data, setData] = useState<ExperimentData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { data, optimisticRef } = useExperiment();
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // Track optimistic status overrides so polling doesn't clobber them
-  const optimisticRef = useRef<{ status: string; until: number } | null>(null);
 
-  const fetchData = useCallback(async () => {
-    const res = await fetch(`/api/experiments/${id}`);
-    if (res.ok) {
-      const json = await res.json();
-      const serverData = json.data as ExperimentData;
+  if (!data) return null;
 
-      // If we have an optimistic override and the server hasn't caught up yet, preserve our status
-      const opt = optimisticRef.current;
-      if (opt && Date.now() < opt.until && serverData.status !== opt.status) {
-        setData((prev) => prev ? { ...serverData, status: opt.status } : serverData);
-      } else {
-        if (opt && (Date.now() >= opt.until || serverData.status === opt.status)) {
-          optimisticRef.current = null;
-        }
-        setData(serverData);
-      }
-
-      return serverData;
-    }
-    return null;
-  }, [id]);
-
-  // Initial load
-  useEffect(() => {
-    fetchData().then(() => setLoading(false));
-  }, [fetchData]);
-
-  // Poll while running or paused
-  useEffect(() => {
-    if (!data) return;
-    const shouldPoll = data.status === "running" || data.status === "paused";
-    if (!shouldPoll) return;
-
-    const poll = async () => {
-      const updated = await fetchData();
-      if (!updated) return;
-      // Don't stop polling if we have an active optimistic override
-      const opt = optimisticRef.current;
-      const effectiveStatus = (opt && Date.now() < opt.until) ? opt.status : updated.status;
-      if (effectiveStatus !== "running" && effectiveStatus !== "paused") {
-        if (pollRef.current) {
-          clearInterval(pollRef.current);
-          pollRef.current = null;
-        }
-      }
-    };
-
-    // Start polling immediately, then every 3s
-    poll();
-    pollRef.current = setInterval(poll, 3000);
-
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [data?.status, fetchData]);
-
-  // ==========================================================================
-  // ACTIONS
-  // ==========================================================================
+  const total = data.totalJudgments ?? 0;
+  const done = data.completedCount + data.failedCount;
+  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const isActive = data.status === "running" || data.status === "paused";
+  const canRun = data.status === "draft" || data.status === "failed";
 
   async function handleRun() {
     setActionLoading(true);
     setError("");
     try {
-      const res = await fetch(`/api/experiments/${id}/run`, {
-        method: "POST",
-      });
+      const res = await fetch(`/api/experiments/${id}/run`, { method: "POST" });
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Failed to start experiment");
       } else {
-        // Optimistically set status — protect from stale poll responses for 10s
         optimisticRef.current = { status: "running", until: Date.now() + 10_000 };
-        setData((prev) =>
-          prev ? { ...prev, status: "running" } : prev
-        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start");
@@ -196,15 +85,8 @@ export default function ExperimentDetailPage() {
         setError(json.error ?? `Failed to ${action}`);
       } else {
         const newStatus =
-          action === "pause"
-            ? "paused"
-            : action === "resume"
-              ? "running"
-              : "cancelled";
+          action === "pause" ? "paused" : action === "resume" ? "running" : "cancelled";
         optimisticRef.current = { status: newStatus, until: Date.now() + 10_000 };
-        setData((prev) =>
-          prev ? { ...prev, status: newStatus } : prev
-        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to ${action}`);
@@ -213,72 +95,15 @@ export default function ExperimentDetailPage() {
     }
   }
 
-  // ==========================================================================
-  // RENDER
-  // ==========================================================================
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="text-center py-20">
-        <p className="text-muted-foreground">Experiment not found.</p>
-        <Button asChild variant="outline" className="mt-4">
-          <Link href="/dashboard/experiments">Back to Experiments</Link>
-        </Button>
-      </div>
-    );
-  }
-
-  const total = data.totalJudgments ?? 0;
-  const done = data.completedCount + data.failedCount;
-  const progressPct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const statusInfo = statusConfig[data.status] ?? statusConfig.draft;
-  const isActive = data.status === "running" || data.status === "paused";
-  const canRun = data.status === "draft" || data.status === "failed";
-
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" asChild className="-ml-2">
-              <Link href="/dashboard/experiments">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
-              {data.name}
-            </h1>
-          </div>
-          {data.description && (
-            <p className="text-muted-foreground text-sm ml-8">
-              {data.description}
-            </p>
-          )}
-        </div>
-        <Badge variant="secondary" className={`${statusInfo.color} shrink-0`}>
-          {isActive && (
-            <Loader2 className="h-3 w-3 animate-spin mr-1" />
-          )}
-          {statusInfo.label}
-        </Badge>
-      </div>
-
       {error && (
         <div className="text-sm text-destructive bg-destructive/10 rounded-md px-3 py-2">
           {error}
         </div>
       )}
 
-      {/* Progress card — shown when running/paused/completed/failed/cancelled */}
+      {/* Progress card */}
       {data.status !== "draft" && (
         <Card>
           <CardHeader className="pb-3">
@@ -301,22 +126,11 @@ export default function ExperimentDetailPage() {
               </div>
               <Progress value={progressPct} className="h-2" />
             </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Stat label="Total" value={total.toLocaleString()} />
-              <Stat
-                label="Completed"
-                value={data.completedCount.toLocaleString()}
-              />
-              <Stat
-                label="Failed"
-                value={data.failedCount.toLocaleString()}
-                warn={data.failedCount > 0}
-              />
-              <Stat
-                label="Remaining"
-                value={(total - done).toLocaleString()}
-              />
+              <Stat label="Completed" value={data.completedCount.toLocaleString()} />
+              <Stat label="Failed" value={data.failedCount.toLocaleString()} warn={data.failedCount > 0} />
+              <Stat label="Remaining" value={(total - done).toLocaleString()} />
             </div>
           </CardContent>
         </Card>
@@ -334,24 +148,16 @@ export default function ExperimentDetailPage() {
                 <AlertDialogTrigger asChild>
                   <Button disabled={actionLoading}>
                     {data.status === "failed" ? (
-                      <>
-                        <RotateCcw className="h-4 w-4 mr-2" />
-                        Retry Experiment
-                      </>
+                      <><RotateCcw className="h-4 w-4 mr-2" />Retry Experiment</>
                     ) : (
-                      <>
-                        <Play className="h-4 w-4 mr-2" />
-                        Run Experiment
-                      </>
+                      <><Play className="h-4 w-4 mr-2" />Run Experiment</>
                     )}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      {data.status === "failed"
-                        ? "Retry Experiment?"
-                        : "Run Experiment?"}
+                      {data.status === "failed" ? "Retry Experiment?" : "Run Experiment?"}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
                       {data.status === "failed"
@@ -362,9 +168,7 @@ export default function ExperimentDetailPage() {
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={handleRun}>
-                      {data.status === "failed"
-                        ? "Retry"
-                        : "Start Experiment"}
+                      {data.status === "failed" ? "Retry" : "Start Experiment"}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -372,44 +176,29 @@ export default function ExperimentDetailPage() {
             )}
 
             {data.status === "running" && (
-              <Button
-                variant="outline"
-                onClick={() => handleAction("pause")}
-                disabled={actionLoading}
-              >
-                <Pause className="h-4 w-4 mr-2" />
-                Pause
+              <Button variant="outline" onClick={() => handleAction("pause")} disabled={actionLoading}>
+                <Pause className="h-4 w-4 mr-2" />Pause
               </Button>
             )}
 
             {data.status === "paused" && (
-              <Button
-                onClick={() => handleAction("resume")}
-                disabled={actionLoading}
-              >
-                <Play className="h-4 w-4 mr-2" />
-                Resume
+              <Button onClick={() => handleAction("resume")} disabled={actionLoading}>
+                <Play className="h-4 w-4 mr-2" />Resume
               </Button>
             )}
 
             {isActive && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button
-                    variant="destructive"
-                    disabled={actionLoading}
-                  >
-                    <Square className="h-4 w-4 mr-2" />
-                    Cancel
+                  <Button variant="destructive" disabled={actionLoading}>
+                    <Square className="h-4 w-4 mr-2" />Cancel
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Cancel Experiment?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will stop the experiment. Completed judgments will be
-                      preserved, but remaining pending judgments will not be
-                      processed.
+                      This will stop the experiment. Completed judgments will be preserved, but remaining pending judgments will not be processed.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -435,40 +224,14 @@ export default function ExperimentDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <Stat
-              label="Models"
-              value={data.modelConfigIds.length.toString()}
-            />
-            <Stat
-              label="Dilemmas"
-              value={data.dilemmaIds.length.toString()}
-            />
-            <Stat
-              label="Values Systems"
-              value={`${data.valuesSystemIds.length} + baseline`}
-            />
-            <Stat
-              label="Modes"
-              value={data.judgmentModes
-                .map((m) => modeLabels[m] ?? m)
-                .join(", ")}
-            />
-            <Stat
-              label="Techniques"
-              value={data.mentalTechniqueIds.length.toString()}
-            />
-            <Stat
-              label="Modifiers"
-              value={data.modifierIds.length.toString()}
-            />
-            <Stat
-              label="Noise Repeats"
-              value={data.noiseRepeats.toString()}
-            />
-            <Stat
-              label="Total Judgments"
-              value={total.toLocaleString()}
-            />
+            <Stat label="Models" value={data.modelConfigIds.length.toString()} />
+            <Stat label="Dilemmas" value={data.dilemmaIds.length.toString()} />
+            <Stat label="Values Systems" value={`${data.valuesSystemIds.length} + baseline`} />
+            <Stat label="Modes" value={data.judgmentModes.map((m) => modeLabels[m] ?? m).join(", ")} />
+            <Stat label="Techniques" value={data.mentalTechniqueIds.length.toString()} />
+            <Stat label="Modifiers" value={data.modifierIds.length.toString()} />
+            <Stat label="Noise Repeats" value={data.noiseRepeats.toString()} />
+            <Stat label="Total Judgments" value={total.toLocaleString()} />
           </div>
         </CardContent>
       </Card>
@@ -480,24 +243,11 @@ export default function ExperimentDetailPage() {
 // STAT COMPONENT
 // =============================================================================
 
-function Stat({
-  label,
-  value,
-  warn,
-}: {
-  label: string;
-  value: string;
-  warn?: boolean;
-}) {
+function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
   return (
     <div className="rounded-md bg-muted px-3 py-2">
-      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div
-        className={`text-sm font-mono truncate ${warn ? "text-destructive" : ""}`}
-        title={value}
-      >
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className={`text-sm font-mono truncate ${warn ? "text-destructive" : ""}`} title={value}>
         {value}
       </div>
     </div>

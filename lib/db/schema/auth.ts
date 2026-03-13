@@ -56,6 +56,7 @@ export const allowedEmail = pgTable("allowed_email", {
   id: text("id").primaryKey(),
   email: text("email"),
   domain: text("domain"),
+  makeAdmin: boolean("make_admin").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   createdBy: text("created_by").references(() => user.id, {
     onDelete: "set null",

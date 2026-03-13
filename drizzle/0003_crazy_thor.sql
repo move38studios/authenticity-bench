@@ -1,0 +1,1 @@
+ALTER TABLE "allowed_email" ADD COLUMN "make_admin" boolean DEFAULT false NOT NULL;

@@ -13,3 +13,13 @@ export async function isEmailAllowed(email: string): Promise<boolean> {
 
   return matches.length > 0;
 }
+
+export async function shouldMakeAdmin(email: string): Promise<boolean> {
+  const match = await db
+    .select({ makeAdmin: allowedEmail.makeAdmin })
+    .from(allowedEmail)
+    .where(eq(allowedEmail.email, email))
+    .limit(1);
+
+  return match.length > 0 && match[0].makeAdmin;
+}

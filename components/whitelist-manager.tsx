@@ -20,19 +20,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { Trash2 } from "lucide-react";
+import { Trash2, ShieldCheck } from "lucide-react";
 
 interface WhitelistEntry {
   id: string;
   email: string | null;
   domain: string | null;
+  makeAdmin: boolean;
   createdAt: string;
 }
 
 export function WhitelistManager() {
   const [entries, setEntries] = useState<WhitelistEntry[]>([]);
   const [email, setEmail] = useState("");
+  const [makeAdmin, setMakeAdmin] = useState(false);
   const [domain, setDomain] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -57,7 +60,10 @@ export function WhitelistManager() {
     const res = await fetch("/api/admin/whitelist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email.trim().toLowerCase() }),
+      body: JSON.stringify({
+        email: email.trim().toLowerCase(),
+        makeAdmin,
+      }),
     });
 
     if (!res.ok) {
@@ -65,6 +71,7 @@ export function WhitelistManager() {
       setError(data.error ?? "Failed to add");
     } else {
       setEmail("");
+      setMakeAdmin(false);
       await fetchEntries();
     }
     setLoading(false);
@@ -111,22 +118,39 @@ export function WhitelistManager() {
             <CardDescription>Allow a specific email address</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={addEmail} className="flex gap-2">
-              <div className="flex-1">
-                <Label htmlFor="email" className="sr-only">
-                  Email
-                </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="user@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+            <form onSubmit={addEmail} className="space-y-3">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <Label htmlFor="email" className="sr-only">
+                    Email
+                  </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="user@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" disabled={loading}>
+                  Add
+                </Button>
               </div>
-              <Button type="submit" disabled={loading}>
-                Add
-              </Button>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="makeAdmin"
+                  checked={makeAdmin}
+                  onCheckedChange={(checked) =>
+                    setMakeAdmin(checked === true)
+                  }
+                />
+                <Label
+                  htmlFor="makeAdmin"
+                  className="text-sm text-muted-foreground cursor-pointer"
+                >
+                  Make admin on signup
+                </Label>
+              </div>
             </form>
           </CardContent>
         </Card>
@@ -187,7 +211,15 @@ export function WhitelistManager() {
                 {emailEntries.map((entry) => (
                   <TableRow key={entry.id}>
                     <TableCell>
-                      <Badge variant="secondary">email</Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary">email</Badge>
+                        {entry.makeAdmin && (
+                          <Badge variant="default" className="gap-1">
+                            <ShieldCheck className="h-3 w-3" />
+                            admin
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {entry.email}
