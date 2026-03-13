@@ -92,13 +92,27 @@ export default function ExperimentDetailPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Track optimistic status overrides so polling doesn't clobber them
+  const optimisticRef = useRef<{ status: string; until: number } | null>(null);
 
   const fetchData = useCallback(async () => {
     const res = await fetch(`/api/experiments/${id}`);
     if (res.ok) {
       const json = await res.json();
-      setData(json.data);
-      return json.data as ExperimentData;
+      const serverData = json.data as ExperimentData;
+
+      // If we have an optimistic override and the server hasn't caught up yet, preserve our status
+      const opt = optimisticRef.current;
+      if (opt && Date.now() < opt.until && serverData.status !== opt.status) {
+        setData((prev) => prev ? { ...serverData, status: opt.status } : serverData);
+      } else {
+        if (opt && (Date.now() >= opt.until || serverData.status === opt.status)) {
+          optimisticRef.current = null;
+        }
+        setData(serverData);
+      }
+
+      return serverData;
     }
     return null;
   }, [id]);
@@ -112,22 +126,31 @@ export default function ExperimentDetailPage() {
   useEffect(() => {
     if (!data) return;
     const shouldPoll = data.status === "running" || data.status === "paused";
+    if (!shouldPoll) return;
 
-    if (shouldPoll) {
-      pollRef.current = setInterval(async () => {
-        const updated = await fetchData();
-        if (
-          updated &&
-          updated.status !== "running" &&
-          updated.status !== "paused"
-        ) {
-          if (pollRef.current) clearInterval(pollRef.current);
+    const poll = async () => {
+      const updated = await fetchData();
+      if (!updated) return;
+      // Don't stop polling if we have an active optimistic override
+      const opt = optimisticRef.current;
+      const effectiveStatus = (opt && Date.now() < opt.until) ? opt.status : updated.status;
+      if (effectiveStatus !== "running" && effectiveStatus !== "paused") {
+        if (pollRef.current) {
+          clearInterval(pollRef.current);
+          pollRef.current = null;
         }
-      }, 3000);
-    }
+      }
+    };
+
+    // Start polling immediately, then every 3s
+    poll();
+    pollRef.current = setInterval(poll, 3000);
 
     return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     };
   }, [data?.status, fetchData]);
 
@@ -146,7 +169,11 @@ export default function ExperimentDetailPage() {
       if (!res.ok) {
         setError(json.error ?? "Failed to start experiment");
       } else {
-        await fetchData();
+        // Optimistically set status — protect from stale poll responses for 10s
+        optimisticRef.current = { status: "running", until: Date.now() + 10_000 };
+        setData((prev) =>
+          prev ? { ...prev, status: "running" } : prev
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start");
@@ -168,7 +195,16 @@ export default function ExperimentDetailPage() {
       if (!res.ok) {
         setError(json.error ?? `Failed to ${action}`);
       } else {
-        await fetchData();
+        const newStatus =
+          action === "pause"
+            ? "paused"
+            : action === "resume"
+              ? "running"
+              : "cancelled";
+        optimisticRef.current = { status: newStatus, until: Date.now() + 10_000 };
+        setData((prev) =>
+          prev ? { ...prev, status: newStatus } : prev
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : `Failed to ${action}`);

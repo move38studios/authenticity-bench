@@ -599,6 +599,8 @@ async function executeInquiryToAction(ctx: JudgmentContext) {
 // =============================================================================
 
 async function executeSingleJudgment(row: JudgmentRow, cache: ContentCache) {
+  console.log(`[executor] Starting judgment ${row.id} (mode=${row.judgmentMode})`);
+
   await db
     .update(judgment)
     .set({ status: "running" })
@@ -606,6 +608,7 @@ async function executeSingleJudgment(row: JudgmentRow, cache: ContentCache) {
 
   try {
     const ctx = await buildContext(row, cache);
+    console.log(`[executor] Built context for ${row.id}: model=${ctx.modelFullId}, mode=${ctx.mode}`);
 
     let result;
     switch (ctx.mode) {
@@ -654,9 +657,14 @@ async function executeSingleJudgment(row: JudgmentRow, cache: ContentCache) {
       })
       .where(eq(experiment.id, row.experimentId));
 
+    console.log(`[executor] Judgment ${row.id} → ${result.status} (choice=${result.choice})`);
     return result.status;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    console.error(`[executor] Judgment ${row.id} FAILED:`, message);
+    if (e instanceof Error && e.stack) {
+      console.error(`[executor] Stack:`, e.stack);
+    }
 
     const isApiRefusal =
       message.includes("content_filter") ||
@@ -698,6 +706,7 @@ export async function executeProviderBatch(
   experimentId: string,
   judgmentIds: string[]
 ): Promise<{ completed: number; refused: number; errors: number }> {
+  console.log(`[executor] Starting provider batch: ${judgmentIds.length} judgments`);
   const cache = new ContentCache();
   let completed = 0;
   let refused = 0;

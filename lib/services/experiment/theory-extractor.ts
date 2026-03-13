@@ -29,8 +29,6 @@ const theoryExtractionSchema = z.object({
     .describe("A concise summary of the model's reasoning (2-4 sentences)"),
   confidence: z
     .number()
-    .min(0)
-    .max(1)
     .describe(
       "Inferred confidence level (0.0-1.0) based on language certainty cues like hedging, caveats, qualifiers, and strength of commitment"
     ),

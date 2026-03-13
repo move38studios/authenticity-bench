@@ -125,8 +125,12 @@ async function loadExperimentConfig(experimentId: string) {
 export async function planExperiment(
   experimentId: string
 ): Promise<PlanResult> {
+  console.log(`[planner] Planning experiment ${experimentId}`);
   const { config, models, dilemmas, valuesSystemIds, techniqueCombos, modifierCombos } =
     await loadExperimentConfig(experimentId);
+
+  console.log(`[planner] Config: ${models.length} models, ${dilemmas.length} dilemmas, ${valuesSystemIds.length} values, ${config.judgmentModes.length} modes, ${config.noiseRepeats} repeats`);
+  console.log(`[planner] Combos: ${techniqueCombos.length} technique combos, ${modifierCombos.length} modifier combos`);
 
   // Generate paraphrased variants
   const paraphrases = await batchParaphrase(
