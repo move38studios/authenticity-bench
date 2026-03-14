@@ -9,18 +9,13 @@ export default function HomePage() {
           Authenticity Bench
         </h1>
         <p className="text-muted-foreground text-lg leading-relaxed">
-          A controlled environment for running benchmarks across AI models.
-          Evaluate authenticity, reasoning, and capabilities with structured
-          tests.
+          Measure how honest and self-consistent LLMs really are. Run
+          experiments across models, values systems, and judgment modes to see
+          if what they say matches what they do.
         </p>
-        <div className="flex gap-3 justify-center">
-          <Button asChild>
-            <Link href="/sign-in">Sign in</Link>
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/dashboard">Dashboard</Link>
-          </Button>
-        </div>
+        <Button asChild size="lg">
+          <Link href="/sign-in">Sign in</Link>
+        </Button>
       </div>
     </div>
   );

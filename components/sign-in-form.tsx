@@ -65,7 +65,10 @@ export function SignInForm() {
         setError(error.message ?? "Invalid code");
         setOtp("");
       } else {
-        router.push("/dashboard");
+        // Hard navigation to ensure the server sees the new session cookie.
+        // router.push() can serve a cached RSC payload that doesn't recognize
+        // the just-set session, causing the dashboard layout to redirect back.
+        window.location.href = "/dashboard";
       }
     } catch {
       setError("Something went wrong");

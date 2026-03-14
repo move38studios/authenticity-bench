@@ -13,9 +13,28 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const description =
+  "Measure how honest and self-consistent LLMs are — do they act the way they say they would?";
+
 export const metadata: Metadata = {
-  title: "Authenticity Bench",
-  description: "AI model benchmarking environment",
+  title: {
+    default: "Authenticity Bench",
+    template: "%s | Authenticity Bench",
+  },
+  description,
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://authenticity-bench.vercel.app"
+  ),
+  openGraph: {
+    title: "Authenticity Bench",
+    description,
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Authenticity Bench",
+    description,
+  },
 };
 
 export default function RootLayout({

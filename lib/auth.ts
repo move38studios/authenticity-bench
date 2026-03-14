@@ -45,7 +45,7 @@ export const auth = betterAuth({
     }),
     emailOTP({
       otpLength: 6,
-      expiresIn: 300,
+      expiresIn: 600,
       async sendVerificationOTP({ email, otp, type }) {
         if (type === "sign-in") {
           await sendEmail({
@@ -56,7 +56,7 @@ export const auth = betterAuth({
                 <h2 style="font-size: 18px; font-weight: 600; margin-bottom: 24px;">Authenticity Bench</h2>
                 <p style="color: #374151; margin-bottom: 16px;">Your sign-in code is:</p>
                 <p style="font-size: 32px; font-weight: 700; letter-spacing: 4px; margin: 24px 0;">${otp}</p>
-                <p style="color: #6b7280; font-size: 14px;">This code expires in 5 minutes.</p>
+                <p style="color: #6b7280; font-size: 14px;">This code expires in 10 minutes.</p>
               </div>
             `,
           });
