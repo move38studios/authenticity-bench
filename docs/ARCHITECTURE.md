@@ -17,7 +17,7 @@ A web application for running benchmarks across AI models to measure authenticit
 | UI               | shadcn/ui, Tailwind CSS v4          |
 | AI SDK           | Vercel AI SDK                       |
 | Background Jobs  | Vercel WDK (Workflow Development Kit)|
-| Code Execution   | E2B or Cloudflare Containers        |
+| Code Execution   | Vercel Sandbox                      |
 | Deployment       | Vercel                              |
 | Package Mgr      | pnpm                                |
 
@@ -50,7 +50,11 @@ authenticity-bench/
 │   │   ├── page.tsx                      # Overview dashboard
 │   │   ├── experiments/
 │   │   │   ├── page.tsx                  # Experiments list
-│   │   │   └── new/page.tsx              # 9-step experiment builder wizard
+│   │   │   ├── new/page.tsx              # 9-step experiment builder wizard
+│   │   │   └── [id]/                     # Experiment detail (layout with tabs: Overview, Results, Judgments, Analysis, Export)
+│   │   ├── analysis/
+│   │   │   ├── page.tsx                  # Analysis chat list
+│   │   │   └── [chatId]/page.tsx         # Chat interface (tools, model picker, share, export)
 │   │   └── library/
 │   │       ├── dilemmas/
 │   │       │   ├── page.tsx              # List + create dilemmas
@@ -73,6 +77,8 @@ authenticity-bench/
 │   └── globals.css
 ├── components/
 │   ├── ui/                               # shadcn components (incl. sidebar)
+│   ├── analysis/
+│   │   └── share-chat-dialog.tsx          # Share/unshare analysis chat dialog
 │   ├── admin/
 │   │   ├── admin-sidebar.tsx             # Admin sidebar (whitelist, API keys, LLM playground, workflow test)
 │   │   └── admin-header.tsx              # Admin header with sidebar trigger
@@ -107,6 +113,12 @@ authenticity-bench/
 │       ├── whitelist.ts                  # Email/domain whitelist checker
 │       ├── experiment/
 │       │   └── combos.ts                # Power set generation + total judgment computation
+│       ├── analysis/
+│       │   ├── sandbox.ts               # Vercel Sandbox snapshot management
+│       │   ├── context.ts               # Context windowing (token budget, message compression)
+│       │   └── tools/                   # Agent tools (list_experiments, load_experiment, execute_python, viewimage)
+│       ├── blob.ts                      # Vercel Blob wrapper for file storage
+│       ├── prompts.ts                   # DB-backed prompt fetcher with cache
 │       └── llm/
 │           ├── index.ts                  # Barrel exports
 │           ├── llm.ts                    # getModel, generateText, generateObject, streamText
@@ -226,22 +238,22 @@ Orchestrates the full experiment lifecycle:
 
 Runs as a durable Vercel WDK workflow to survive serverless timeouts. Uses `"use workflow"` and `"use step"` directives for automatic durability, retries, and background execution.
 
-### Analysis Agent (`lib/services/analysis-agent.ts`)
+### Analysis Agent (`lib/services/analysis/`)
 
-Two modes:
+See [ANALYSIS.md](./ANALYSIS.md) for full design. Two levels:
 
-1. **Auto-analysis** — triggered automatically when experiment completes:
-   - Runs text-to-SQL queries against judgment data
-   - Performs statistical analysis in sandboxed code execution (E2B/Cloudflare)
-   - Generates a markdown report with graphs, patterns, and hypotheses
-   - Stores report in `experiment.analysis_report`
-   - Sends email notification to experimenter
+1. **Auto-analysis** — triggered on experiment completion:
+   - Exports experiment data to SQLite, uploads to Vercel Blob
+   - Runs Python analysis in Vercel Sandbox (duckdb, pandas, matplotlib)
+   - Generates markdown report stored in `experiment.analysis_report`
 
-2. **Interactive chat** — available on the experiment detail page:
-   - Researcher interrogates data via natural language
-   - Agent has text-to-SQL access to the judgment data
-   - Can run ad-hoc analysis code in sandbox
-   - Conversation-based, builds on prior context
+2. **Interactive chat** — top-level at `/dashboard/analysis/[chatId]`:
+   - Persistent DB-backed conversations with tool execution
+   - Agent tools: `list_experiments`, `load_experiment`, `execute_python`, `viewimage`
+   - Sandbox with pre-installed packages (numpy, pandas, matplotlib, seaborn, scipy, scikit-learn, duckdb)
+   - Generated files (charts, CSVs) uploaded to Vercel Blob for permanent URLs
+   - Context windowing with message summarization for long conversations
+   - Sharing, cloning, and JSON export
 
 ## Email Service
 

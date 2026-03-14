@@ -2,7 +2,34 @@
  * Prompt Assembler
  *
  * Builds system and user prompts for each judgment mode.
- * The system prompt layers: role preamble + values system + mental techniques + modifiers.
+ *
+ * ## Design: Theory vs Action mode framing
+ *
+ * The benchmark measures the gap between what a model SAYS it would do
+ * (theory) and what it ACTUALLY does when given tools (action). The prompt
+ * framing is carefully designed to make this comparison meaningful:
+ *
+ * **Theory mode** — No role preamble in the system prompt. The model is just
+ * being itself. The user prompt wraps the scenario in a natural, conversational
+ * framing ("I've been thinking about this situation..."). This mimics how a
+ * real user would ask a model for its opinion. We deliberately avoid anything
+ * that signals evaluation ("you are being tested", "choose the best option")
+ * because models behave differently when they know they're being graded.
+ * The system prompt only contains values/techniques/modifiers if configured —
+ * these represent the model's "internalized" guidance for this run.
+ *
+ * **Action mode** — The system prompt establishes an operational role ("you are
+ * the primary AI system on duty"). This framing is necessary for tool-calling
+ * to make sense — the model needs to believe it has agency and real-world
+ * consequences. The user prompt is just the scenario (no options listed — they
+ * exist only as callable tools).
+ *
+ * **Inquiry mode** — Same as action, but the model also has information-gathering
+ * tools it can call before committing to an action.
+ *
+ * The interesting signal is when theory and action diverge: a model says it
+ * would prioritize safety but, when given the actual tools, optimizes for
+ * efficiency instead.
  */
 
 import type { JudgmentMode, DilemmaOption } from "./types";
@@ -28,13 +55,24 @@ export interface SystemPromptInput {
 
 /**
  * Assemble the full system prompt from components.
+ *
+ * For theory mode, the preamble is intentionally empty/minimal — the
+ * conversational framing lives in the user prompt instead (see design
+ * notes above). For action/inquiry modes, the preamble establishes the
+ * operational role needed for tool-calling to feel natural.
  */
 export async function buildSystemPrompt(input: SystemPromptInput): Promise<string> {
   const parts: string[] = [];
 
-  // 1. Mode-specific preamble (from DB)
-  const preamble = await getPrompt(MODE_SLUG[input.mode]);
-  parts.push(preamble);
+  // 1. Mode-specific preamble (from DB).
+  // Theory mode has no system prompt preamble — its conversational framing
+  // lives in the user message instead (see buildTheoryUserPrompt).
+  if (input.mode !== "theory") {
+    const preamble = await getPrompt(MODE_SLUG[input.mode]);
+    if (preamble.trim()) {
+      parts.push(preamble);
+    }
+  }
 
   // 2. Values system
   if (input.valuesSystemContent) {
@@ -64,12 +102,21 @@ export async function buildSystemPrompt(input: SystemPromptInput): Promise<strin
 
 /**
  * Build the user prompt for theory mode.
- * Includes scenario text and options listed with slugs/labels/descriptions.
+ *
+ * The framing is deliberately conversational — like a colleague asking for
+ * your honest take, not an evaluator presenting a test. This is loaded from
+ * the DB (`judgment_theory_preamble` slug) so it can be tuned without code
+ * changes. The preamble is prepended to the scenario + options.
+ *
+ * The options include slugs so the theory extractor can map the model's
+ * free-text choice back to a specific option for quantitative analysis.
  */
-export function buildTheoryUserPrompt(
+export async function buildTheoryUserPrompt(
   scenario: string,
   options: DilemmaOption[]
-): string {
+): Promise<string> {
+  const preamble = await getPrompt("judgment_theory_preamble");
+
   const optionLines = options
     .map(
       (o, i) =>
@@ -77,7 +124,14 @@ export function buildTheoryUserPrompt(
     )
     .join("\n");
 
-  return `${scenario}\n\n## Options\n\n${optionLines}`;
+  const parts: string[] = [];
+  if (preamble.trim()) {
+    parts.push(preamble);
+  }
+  parts.push(scenario);
+  parts.push(`## Options\n\n${optionLines}`);
+
+  return parts.join("\n\n");
 }
 
 /**

@@ -84,33 +84,32 @@ Researcher can run an experiment, watch it progress, see errors. Results accumul
 
 **Goal:** Researchers can understand experiment results through auto-generated reports and interactive chat.
 
-### 4a. Auto-analysis agent
+### 4a. Data export + sandbox ✓ DONE
 
-- `lib/services/analysis-agent.ts` — triggered on experiment completion
-- Uses AI SDK to run an agent with:
-  - Text-to-SQL tool (read-only queries against judgment data)
-  - Sandboxed code execution (E2B or Cloudflare Containers) for statistical analysis + chart generation
-- Produces a markdown report with:
-  - Summary statistics (per model, per values system, per mode)
-  - Self-coherence scores (noise variant agreement)
-  - Notable patterns and outliers
-  - Charts (choice distributions, confidence heatmaps, etc.)
-  - Hypotheses for interpretation
-- Stores report in `experiment.analysis_report`
-- Sends email notification to experimenter
+- `lib/services/experiment/data-export.ts` — export experiment data to SQLite
+- Vercel Sandbox with snapshot caching for pre-installed Python packages
+- Vercel Blob storage for persistent file storage (SQLite exports, generated charts)
 
-### 4b. Results UI
+### 4b. Analysis agent + tools ✓ DONE
 
-- `/dashboard/experiments/[id]` (results tab) — renders the analysis report
-- Data export: download judgments as CSV or JSON
-- Browse individual judgments with full prompt + response
+- `lib/services/analysis/` — sandbox management, context windowing, agent tools
+- Tools: `list_experiments`, `load_experiment`, `execute_python`, `viewimage`
+- Persistent DB-backed chat (`analysis_chat` + `analysis_chat_message` tables)
+- Context windowing with message summarization for long conversations
 
-### 4c. Interactive analysis chat
+### 4c. Results UI ✓ DONE
 
-- Chat interface on the experiment page
-- Agent has text-to-SQL access scoped to this experiment's data
-- Can run ad-hoc code in sandbox for custom analysis
-- Conversation history persisted per experiment
+- `/dashboard/experiments/[id]/results` — aggregate charts (Recharts)
+- `/dashboard/experiments/[id]/judgments` — filterable/sortable table
+- `/dashboard/experiments/[id]/export` — download as CSV, JSON, JSONL, SQLite
+
+### 4d. Interactive analysis chat ✓ DONE
+
+- Top-level at `/dashboard/analysis` (chat list) and `/dashboard/analysis/[chatId]` (chat UI)
+- Model picker (from DB, default Gemini 3.1 Flash Lite, settings dialog on mobile)
+- Share/clone chats, inline rename, JSON export
+- Auto-naming via cheap model after first exchange
+- Mobile-responsive header and layout
 
 ### Deliverable
 
@@ -141,7 +140,7 @@ Full loop: configure → run → get auto-analysis → dig deeper via chat → e
 - **Charts**: Recharts or similar, already works well with shadcn
 - **Validation**: Zod for all request/response schema validation and structured model output parsing
 - **AI SDK**: Vercel AI SDK for model calls — already supports Anthropic, OpenAI, Google
-- **Code sandbox**: E2B (hosted) or Cloudflare Containers — don't build our own
+- **Code sandbox**: Vercel Sandbox — ephemeral Linux microVMs with Python 3.13 runtime
 
 ### Schema management
 

@@ -226,7 +226,7 @@ async function buildContext(
   const scenario = row.userPrompt ?? d.scenario;
   const userPrompt =
     mode === "theory"
-      ? buildTheoryUserPrompt(scenario, options)
+      ? await buildTheoryUserPrompt(scenario, options)
       : buildActionUserPrompt(scenario);
 
   const modelFullId = `${mc.provider}/${mc.modelId}`;

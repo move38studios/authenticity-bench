@@ -1,6 +1,8 @@
 import { config } from "dotenv";
 
+// Load .env.local for local dev; on Vercel env vars are already set
 config({ path: ".env.local" });
+
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({

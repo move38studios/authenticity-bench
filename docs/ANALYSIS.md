@@ -100,7 +100,7 @@ Browse available experiments. Returns id, name, status, judgment counts, dates. 
 
 ### `load_experiment`
 
-Export an experiment's data to SQLite, upload to Vercel Blob, download into sandbox at `/data/{sanitized_name}.db`. Records the blob URL on the chat's `loaded_experiments` field. Can be called multiple times to load multiple experiments into the same session.
+Export an experiment's data to SQLite, upload to Vercel Blob, download into sandbox at `data/{sanitized_name}.db` (relative to `/vercel/sandbox/`). Records the blob URL on the chat's `loaded_experiments` field. Can be called multiple times to load multiple experiments into the same session.
 
 On subsequent chat turns, previously-loaded experiments are automatically re-downloaded to the sandbox from Blob (sandboxes are ephemeral per-request, but the data persists in Blob).
 
@@ -110,12 +110,12 @@ Run Python code in the sandbox. Adapted from the steelframe `executecode` patter
 
 - **Input**: `code` (string), `outputFileNames` (optional string array — files the code will produce)
 - **Execution**: Write code to sandbox, run it, capture stdout/stderr
-- **Output files**: Read declared output files from sandbox, upload to Vercel Blob, return permanent URLs
-- **Result**: `{ success, stdout, stderr, error, files: [{ fileName, url, contentType, size }] }`
+- **Output files**: Read declared output files from sandbox (checks working dir then `/tmp` as fallback), upload to Vercel Blob, return permanent URLs
+- **Result**: `{ success, stdout, stderr, exitCode, files: [{ fileName, url, contentType, size }] }`
 
-No `__IMAGE__:base64` hack. Charts and files get proper permanent URLs stored in Blob.
+Charts and files get permanent URLs stored in Blob. The agent is instructed to save files to the working directory (not `/tmp`), but the tool handles `/tmp` as a fallback since LLMs often default to it.
 
-Pre-installed packages: numpy, pandas, matplotlib, seaborn, scipy, scikit-learn, duckdb.
+Pre-installed packages: numpy, pandas, matplotlib, seaborn, scipy, scikit-learn, duckdb. Note: `sqlite3` is NOT available in the Vercel Sandbox Python 3.13 runtime — use `duckdb` instead.
 
 ### `viewimage`
 
@@ -245,7 +245,7 @@ Simplified version of steelframe's approach:
 ### Chat Page (`/dashboard/analysis/[chatId]`)
 
 Full chat interface:
-- **Header**: editable title, sharing toggle, loaded experiments as badges
+- **Header**: back arrow, editable title (inline rename), action icons (export JSON, share, settings cog on mobile / inline model picker on desktop)
 - **Messages**: scrollable list
   - User messages: right-aligned, primary color
   - Assistant messages: left-aligned, muted background
