@@ -11,6 +11,7 @@ import {
   Cpu,
   Shield,
   Beaker,
+  MessageSquareText,
 } from "lucide-react";
 import {
   Sidebar,
@@ -107,6 +108,18 @@ export function DashboardSidebar({ user }: DashboardSidebarProps) {
                 title: "Experiments",
                 url: "/dashboard/experiments",
                 icon: Beaker,
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {renderNavItem({
+                title: "Analysis",
+                url: "/dashboard/analysis",
+                icon: MessageSquareText,
               })}
             </SidebarMenu>
           </SidebarGroupContent>

@@ -22,7 +22,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Play, Pause, Square, RotateCcw } from "lucide-react";
+import { Play, Pause, Square, RotateCcw, Pencil } from "lucide-react";
+import Link from "next/link";
 import { useExperiment } from "./layout";
 
 // =============================================================================
@@ -143,6 +144,13 @@ export default function ExperimentOverviewPage() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
+            {data.status === "draft" && (
+              <Button variant="outline" asChild>
+                <Link href={`/dashboard/experiments/${id}/edit`}>
+                  <Pencil className="h-4 w-4 mr-2" />Edit Configuration
+                </Link>
+              </Button>
+            )}
             {canRun && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>

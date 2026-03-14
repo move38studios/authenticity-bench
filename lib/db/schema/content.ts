@@ -64,6 +64,21 @@ export const mentalTechnique = pgTable("mental_technique", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+export const systemPrompt = pgTable("system_prompt", {
+  id: text("id").primaryKey(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  content: text("content").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // judgment, generation, analysis, utility
+  variables: text("variables"), // documents template vars e.g. "{{options}}, {{modelResponse}}"
+  createdBy: text("created_by").references(() => user.id, {
+    onDelete: "set null",
+  }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
 export const modifier = pgTable("modifier", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),

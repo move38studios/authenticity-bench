@@ -1,17 +1,19 @@
 import { db } from "@/lib/db";
 import { judgment, experiment } from "@/lib/db/schema/experiment";
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getSession, unauthorized, notFound, badRequest } from "@/lib/api/helpers";
+import { exportExperimentToSQLite } from "@/lib/services/experiment/data-export";
 
 const LIGHT_FIELDS = [
   "id", "status", "dilemmaId", "modelConfigId", "valuesSystemId",
   "mentalTechniqueIds", "modifierIds", "judgmentMode", "noiseIndex",
   "refusalType", "choice", "reasoning", "confidence", "errorMessage",
+  "userPrompt", "systemPrompt",
   "latencyMs", "promptTokens", "completionTokens", "costEstimate", "createdAt",
 ] as const;
 
 const HEAVY_FIELDS = [
-  "systemPrompt", "userPrompt", "conversationLog", "rawResponse",
+  "conversationLog", "rawResponse",
   "inquiryToolCalls", "reasoningTokens",
 ] as const;
 
@@ -41,8 +43,20 @@ export async function GET(
 
   const url = new URL(request.url);
   const format = url.searchParams.get("format") ?? "csv";
-  if (!["csv", "json", "jsonl"].includes(format)) {
-    return badRequest("format must be csv, json, or jsonl");
+  if (!["csv", "json", "jsonl", "sqlite"].includes(format)) {
+    return badRequest("format must be csv, json, jsonl, or sqlite");
+  }
+
+  // SQLite export — returns full denormalized database file
+  if (format === "sqlite") {
+    const buffer = await exportExperimentToSQLite(id);
+    const safeName = exp.name.replace(/[^a-zA-Z0-9-_]/g, "_").slice(0, 50);
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/x-sqlite3",
+        "Content-Disposition": `attachment; filename="${safeName}_experiment.db"`,
+      },
+    });
   }
 
   // Parse field selection

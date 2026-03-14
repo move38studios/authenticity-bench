@@ -90,10 +90,8 @@ async function extractProviderFromModelId(
       return "anthropic";
     case "openai":
       return "openai";
-    case "google": {
-      const dbKey = await getActiveApiKey("google");
-      return dbKey ? "google" : "openrouter";
-    }
+    case "google":
+      return "google";
     default:
       return "openrouter";
   }

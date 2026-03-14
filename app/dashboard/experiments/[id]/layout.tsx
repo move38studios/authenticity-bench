@@ -25,6 +25,7 @@ export interface ExperimentData {
   startedAt: string | null;
   finishedAt: string | null;
   analysisStatus: string | null;
+  analysisReport: string | null;
   modelConfigIds: string[];
   dilemmaIds: string[];
   valuesSystemIds: string[];
@@ -69,6 +70,7 @@ const tabs = [
   { label: "Overview", href: "" },
   { label: "Results", href: "/results" },
   { label: "Judgments", href: "/judgments" },
+  { label: "Analysis", href: "/analysis" },
   { label: "Export", href: "/export" },
 ];
 
@@ -198,13 +200,13 @@ export default function ExperimentLayout({
         </div>
 
         {/* Tab navigation */}
-        <nav className="flex gap-1 border-b">
+        <nav className="flex gap-1 border-b overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
           {tabs.map((tab) => (
             <Link
               key={tab.href}
               href={`${basePath}${tab.href}`}
               className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                "px-3 sm:px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap",
                 activeHref === tab.href
                   ? "border-foreground text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"

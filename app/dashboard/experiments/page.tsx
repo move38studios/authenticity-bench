@@ -30,7 +30,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Eye, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Experiment {
   id: string;
@@ -40,6 +41,7 @@ interface Experiment {
   totalJudgments: number | null;
   completedCount: number;
   failedCount: number;
+  previewToken: string | null;
   createdAt: string;
 }
 
@@ -54,6 +56,7 @@ const statusColors: Record<string, string> = {
 export default function ExperimentsPage() {
   const [items, setItems] = useState<Experiment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previewingId, setPreviewingId] = useState<string | null>(null);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -74,18 +77,42 @@ export default function ExperimentsPage() {
     await fetchItems();
   }
 
+  async function handlePreview(item: Experiment) {
+    if (item.previewToken) {
+      window.open(`/preview/${item.previewToken}`, "_blank");
+      return;
+    }
+    setPreviewingId(item.id);
+    try {
+      const res = await fetch(`/api/experiments/${item.id}/preview-token`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        toast.error("Failed to generate preview link");
+        return;
+      }
+      const { data } = await res.json();
+      window.open(`/preview/${data.previewToken}`, "_blank");
+      await fetchItems();
+    } catch {
+      toast.error("Failed to generate preview link");
+    } finally {
+      setPreviewingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="space-y-3 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight">
             Experiments
           </h1>
           <p className="text-muted-foreground mt-1">
             Configure and run benchmark experiments across models.
           </p>
         </div>
-        <Button asChild>
+        <Button asChild className="w-full sm:w-auto">
           <Link href="/dashboard/experiments/new">
             <Plus className="h-4 w-4 mr-2" />
             New Experiment
@@ -117,7 +144,7 @@ export default function ExperimentsPage() {
                     <TableHead className="text-right">Judgments</TableHead>
                     <TableHead className="text-right hidden sm:table-cell">Progress</TableHead>
                     <TableHead className="hidden md:table-cell">Created</TableHead>
-                    <TableHead className="w-12" />
+                    <TableHead className="w-20" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -156,6 +183,20 @@ export default function ExperimentsPage() {
                         {new Date(item.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
+                        <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePreview(item)}
+                          disabled={previewingId === item.id}
+                          title="Preview"
+                        >
+                          {previewingId === item.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </Button>
                         {item.status === "draft" && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -184,6 +225,7 @@ export default function ExperimentsPage() {
                             </AlertDialogContent>
                           </AlertDialog>
                         )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

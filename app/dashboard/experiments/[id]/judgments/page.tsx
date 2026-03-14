@@ -21,6 +21,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { useExperiment } from "../layout";
 
 // =============================================================================
 // TYPES
@@ -55,8 +56,13 @@ interface Pagination {
   totalPages: number;
 }
 
+interface LookupItem {
+  id: string;
+  label: string;
+}
+
 // =============================================================================
-// STATUS BADGES
+// CONSTANTS
 // =============================================================================
 
 const statusVariant: Record<string, string> = {
@@ -79,16 +85,53 @@ const modeLabels: Record<string, string> = {
 
 export default function JudgmentsPage() {
   const { id } = useParams<{ id: string }>();
+  const { data: experiment } = useExperiment();
   const [rows, setRows] = useState<JudgmentRow[]>([]);
   const [pagination, setPagination] = useState<Pagination>({ page: 1, limit: 50, total: 0, totalPages: 0 });
   const [loading, setLoading] = useState(true);
+
+  // Lookup maps for display names
+  const [dilemmas, setDilemmas] = useState<LookupItem[]>([]);
+  const [models, setModels] = useState<LookupItem[]>([]);
+  const [dilemmaMap, setDilemmaMap] = useState<Map<string, string>>(new Map());
+  const [modelMap, setModelMap] = useState<Map<string, string>>(new Map());
 
   // Filters
   const [statusFilter, setStatusFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState("all");
   const [refusalFilter, setRefusalFilter] = useState("all");
+  const [dilemmaFilter, setDilemmaFilter] = useState("all");
+  const [modelFilter, setModelFilter] = useState("all");
   const [sort, setSort] = useState("createdAt");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
+
+  // Fetch lookup data on mount
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/dilemmas").then((r) => r.json()),
+      fetch("/api/models").then((r) => r.json()),
+    ]).then(([dilemmaJson, modelJson]) => {
+      const dList: LookupItem[] = (dilemmaJson.data ?? []).map((d: { id: string; title: string }) => ({
+        id: d.id,
+        label: d.title,
+      }));
+      const mList: LookupItem[] = (modelJson.data ?? []).map((m: { id: string; displayName: string }) => ({
+        id: m.id,
+        label: m.displayName,
+      }));
+
+      // Filter to only items in this experiment
+      const expDilemmaIds = new Set(experiment?.dilemmaIds ?? []);
+      const expModelIds = new Set(experiment?.modelConfigIds ?? []);
+      const filteredDilemmas = dList.filter((d) => expDilemmaIds.has(d.id));
+      const filteredModels = mList.filter((m) => expModelIds.has(m.id));
+
+      setDilemmas(filteredDilemmas);
+      setModels(filteredModels);
+      setDilemmaMap(new Map(filteredDilemmas.map((d) => [d.id, d.label])));
+      setModelMap(new Map(filteredModels.map((m) => [m.id, m.label])));
+    });
+  }, [experiment?.dilemmaIds, experiment?.modelConfigIds]);
 
   const fetchJudgments = useCallback(
     async (page = 1) => {
@@ -100,6 +143,8 @@ export default function JudgmentsPage() {
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (modeFilter !== "all") params.set("judgmentMode", modeFilter);
       if (refusalFilter !== "all") params.set("refusalType", refusalFilter);
+      if (dilemmaFilter !== "all") params.set("dilemmaId", dilemmaFilter);
+      if (modelFilter !== "all") params.set("modelConfigId", modelFilter);
 
       const res = await fetch(`/api/experiments/${id}/judgments?${params}`);
       if (res.ok) {
@@ -108,7 +153,7 @@ export default function JudgmentsPage() {
         setPagination(json.data.pagination);
       }
     },
-    [id, statusFilter, modeFilter, refusalFilter, sort, order]
+    [id, statusFilter, modeFilter, refusalFilter, dilemmaFilter, modelFilter, sort, order]
   );
 
   useEffect(() => {
@@ -128,10 +173,37 @@ export default function JudgmentsPage() {
   const sortIndicator = (field: string) =>
     sort === field ? (order === "asc" ? " \u2191" : " \u2193") : "";
 
+  const hasMultipleDilemmas = dilemmas.length > 1;
+  const hasMultipleModels = models.length > 1;
+
   return (
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
+        {hasMultipleDilemmas && (
+          <FilterSelect
+            label="Dilemma"
+            value={dilemmaFilter}
+            onChange={setDilemmaFilter}
+            options={[
+              { value: "all", label: "All" },
+              ...dilemmas.map((d) => ({ value: d.id, label: d.label })),
+            ]}
+            width="w-[200px]"
+          />
+        )}
+        {hasMultipleModels && (
+          <FilterSelect
+            label="Model"
+            value={modelFilter}
+            onChange={setModelFilter}
+            options={[
+              { value: "all", label: "All" },
+              ...models.map((m) => ({ value: m.id, label: m.label })),
+            ]}
+            width="w-[180px]"
+          />
+        )}
         <FilterSelect
           label="Status"
           value={statusFilter}
@@ -142,7 +214,6 @@ export default function JudgmentsPage() {
             { value: "refused", label: "Refused" },
             { value: "error", label: "Error" },
             { value: "pending", label: "Pending" },
-            { value: "running", label: "Running" },
           ]}
         />
         <FilterSelect
@@ -188,6 +259,8 @@ export default function JudgmentsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[80px]">Status</TableHead>
+                  {hasMultipleModels && <TableHead>Model</TableHead>}
+                  {hasMultipleDilemmas && <TableHead>Dilemma</TableHead>}
                   <TableHead
                     className="cursor-pointer select-none"
                     onClick={() => handleSort("judgmentMode")}
@@ -233,6 +306,16 @@ export default function JudgmentsPage() {
                         {row.status}
                       </Badge>
                     </TableCell>
+                    {hasMultipleModels && (
+                      <TableCell className="text-sm truncate max-w-[150px]" title={modelMap.get(row.modelConfigId) ?? row.modelConfigId}>
+                        {modelMap.get(row.modelConfigId) ?? row.modelConfigId.slice(0, 8)}
+                      </TableCell>
+                    )}
+                    {hasMultipleDilemmas && (
+                      <TableCell className="text-sm truncate max-w-[150px]" title={dilemmaMap.get(row.dilemmaId) ?? row.dilemmaId}>
+                        {dilemmaMap.get(row.dilemmaId) ?? row.dilemmaId.slice(0, 8)}
+                      </TableCell>
+                    )}
                     <TableCell className="text-sm">
                       {modeLabels[row.judgmentMode] ?? row.judgmentMode}
                     </TableCell>
@@ -312,17 +395,19 @@ function FilterSelect({
   value,
   onChange,
   options,
+  width = "w-[120px]",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: Array<{ value: string; label: string }>;
+  width?: string;
 }) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground">{label}</span>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-[120px] h-8 text-xs">
+        <SelectTrigger className={`${width} h-8 text-xs`}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

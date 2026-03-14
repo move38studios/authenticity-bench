@@ -183,19 +183,12 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function MessageBubble({ message }: { message: ConversationMessage }) {
-  const roleColors: Record<string, string> = {
-    system: "bg-muted border-muted",
-    user: "bg-blue-50 border-blue-200 dark:bg-blue-950 dark:border-blue-800",
-    assistant: "bg-green-50 border-green-200 dark:bg-green-950 dark:border-green-800",
-    tool: "bg-amber-50 border-amber-200 dark:bg-amber-950 dark:border-amber-800",
-  };
-
   return (
-    <div className={`rounded-md border p-3 ${roleColors[message.role] ?? "bg-muted"}`}>
-      <Badge variant="outline" className="text-[10px] mb-2">
+    <div className="rounded-md border bg-card p-3">
+      <Badge variant="secondary" className="text-[10px] mb-2">
         {message.role}
       </Badge>
-      <div className="text-sm whitespace-pre-wrap">{message.content}</div>
+      <div className="text-sm whitespace-pre-wrap break-words">{message.content}</div>
       {message.toolCalls && message.toolCalls.length > 0 && (
         <div className="mt-2 space-y-1">
           {message.toolCalls.map((tc) => (
@@ -240,7 +233,7 @@ function CollapsiblePrompt({ title, content }: { title: string; content: string 
       </CardHeader>
       {open && (
         <CardContent>
-          <pre className="text-xs font-mono whitespace-pre-wrap bg-muted rounded-md p-3 max-h-96 overflow-y-auto">
+          <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-muted rounded-md p-3 max-h-96 overflow-y-auto">
             {content}
           </pre>
         </CardContent>

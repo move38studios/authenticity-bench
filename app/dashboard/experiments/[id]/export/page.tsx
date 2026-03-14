@@ -68,6 +68,7 @@ export default function ExportPage() {
                 <SelectItem value="csv">CSV</SelectItem>
                 <SelectItem value="json">JSON</SelectItem>
                 <SelectItem value="jsonl">JSONL (newline-delimited)</SelectItem>
+                <SelectItem value="sqlite">SQLite (full database)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -95,9 +96,9 @@ export default function ExportPage() {
               onCheckedChange={setIncludeFullResponses}
             />
             <Label htmlFor="full-responses" className="cursor-pointer">
-              Include full responses
+              Include full conversation logs
               <span className="block text-xs text-muted-foreground font-normal">
-                Adds system prompts, user prompts, conversation logs, and raw responses. Makes files much larger.
+                Adds full conversation transcripts, raw API responses, and tool call details. Makes files much larger. Prompts are always included by default.
               </span>
             </Label>
           </div>

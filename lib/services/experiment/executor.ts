@@ -216,7 +216,7 @@ async function buildContext(
     modifierContents.push(m.content);
   }
 
-  const systemPrompt = buildSystemPrompt({
+  const systemPrompt = await buildSystemPrompt({
     mode,
     valuesSystemContent: valuesContent,
     mentalTechniqueContents: techniqueContents,

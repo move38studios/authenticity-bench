@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import {
   Card,
@@ -9,6 +9,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import {
   BarChart,
@@ -27,8 +34,14 @@ import { useExperiment } from "../layout";
 // TYPES
 // =============================================================================
 
+interface DilemmaInfo {
+  dilemmaId: string;
+  title: string | null;
+}
+
 interface Stats {
   overview: { total: number | null; completed: number; failed: number };
+  dilemmas: DilemmaInfo[];
   byStatus: Array<{ status: string; count: number }>;
   byModel: Array<{ modelConfigId: string; displayName: string; provider: string; count: number; completedCount: number }>;
   byChoice: Array<{ choice: string | null; count: number }>;
@@ -65,27 +78,32 @@ export default function ResultsPage() {
   const { data: experiment } = useExperiment();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dilemmaFilter, setDilemmaFilter] = useState("all");
 
-  useEffect(() => {
-    fetch(`/api/experiments/${id}/judgments/stats`)
-      .then((r) => r.json())
-      .then((json) => setStats(json.data))
-      .finally(() => setLoading(false));
-  }, [id]);
-
-  // Re-fetch when experiment progresses
-  useEffect(() => {
-    if (!experiment || experiment.status === "draft") return;
-    const refetch = () =>
-      fetch(`/api/experiments/${id}/judgments/stats`)
+  const fetchStats = useCallback(
+    (dilemmaId?: string) => {
+      const params = new URLSearchParams();
+      if (dilemmaId && dilemmaId !== "all") params.set("dilemmaId", dilemmaId);
+      return fetch(`/api/experiments/${id}/judgments/stats?${params}`)
         .then((r) => r.json())
         .then((json) => setStats(json.data));
+    },
+    [id]
+  );
 
-    if (experiment.status === "running" || experiment.status === "paused") {
-      const interval = setInterval(refetch, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [id, experiment?.status, experiment?.completedCount]);
+  // Initial load
+  useEffect(() => {
+    fetchStats(dilemmaFilter).finally(() => setLoading(false));
+  }, [fetchStats, dilemmaFilter]);
+
+  // Live polling while running
+  useEffect(() => {
+    if (!experiment || experiment.status === "draft") return;
+    if (experiment.status !== "running" && experiment.status !== "paused") return;
+
+    const interval = setInterval(() => fetchStats(dilemmaFilter), 5000);
+    return () => clearInterval(interval);
+  }, [fetchStats, dilemmaFilter, experiment?.status]);
 
   if (loading) {
     return (
@@ -99,6 +117,9 @@ export default function ResultsPage() {
 
   const completedTotal = stats.byChoice.reduce((s, r) => s + Number(r.count), 0);
   const total = stats.overview.total ?? 0;
+  const hasMultipleDilemmas = stats.dilemmas.length > 1;
+  // Choice-specific charts only make sense within a single dilemma
+  const showChoiceCharts = !hasMultipleDilemmas || dilemmaFilter !== "all";
 
   if (completedTotal === 0) {
     return (
@@ -113,7 +134,7 @@ export default function ResultsPage() {
     );
   }
 
-  // Build cross-tab data: choice × model
+  // Build chart data
   const choiceByModelData = buildCrossTab(
     stats.choiceByModel,
     (r) => r.choice ?? "no_choice",
@@ -121,7 +142,6 @@ export default function ResultsPage() {
     (r) => Number(r.count)
   );
 
-  // Build cross-tab data: choice × values system
   const choiceByValuesData = buildCrossTab(
     stats.choiceByValues,
     (r) => r.choice ?? "no_choice",
@@ -129,7 +149,6 @@ export default function ResultsPage() {
     (r) => Number(r.count)
   );
 
-  // Confidence by model
   const confidenceData = stats.confidenceStats.map((r) => ({
     name: r.displayName ?? r.modelConfigId.slice(0, 8),
     avg: Number(Number(r.avgConfidence).toFixed(2)),
@@ -137,7 +156,6 @@ export default function ResultsPage() {
     max: Number(Number(r.maxConfidence).toFixed(2)),
   }));
 
-  // Refusal breakdown
   const refusalData = stats.byRefusalType.map((r) => ({
     name: r.refusalType ?? "unknown",
     count: Number(r.count),
@@ -145,62 +163,92 @@ export default function ResultsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Data completeness indicator */}
-      {total > 0 && completedTotal < total && (
-        <div className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">
-          Showing results for {completedTotal.toLocaleString()} of {total.toLocaleString()} judgments
-          {experiment?.status === "running" && " — updating live"}
-        </div>
-      )}
-
-      {/* Choice Distribution by Model */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Choice Distribution by Model</CardTitle>
-          <CardDescription>How each model responded across all conditions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={choiceByModelData.data}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
-                {choiceByModelData.series.map((key, i) => (
-                  <Bar key={key} dataKey={key} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
+      {/* Filters and status */}
+      <div className="flex flex-wrap items-center gap-4">
+        {hasMultipleDilemmas && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Dilemma</span>
+            <Select value={dilemmaFilter} onValueChange={setDilemmaFilter}>
+              <SelectTrigger className="w-[250px] h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dilemmas</SelectItem>
+                {stats.dilemmas.map((d) => (
+                  <SelectItem key={d.dilemmaId} value={d.dilemmaId}>
+                    {d.title ?? d.dilemmaId.slice(0, 8)}
+                  </SelectItem>
                 ))}
-              </BarChart>
-            </ResponsiveContainer>
+              </SelectContent>
+            </Select>
           </div>
-        </CardContent>
-      </Card>
+        )}
 
-      {/* Values System Effect */}
-      {choiceByValuesData.series.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Values System Effect</CardTitle>
-            <CardDescription>How values systems shift choice distribution</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={choiceByValuesData.data}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip />
-                  <Legend />
-                  {choiceByValuesData.series.map((key, i) => (
-                    <Bar key={key} dataKey={key} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
+        {total > 0 && completedTotal < total && (
+          <div className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-1.5">
+            {completedTotal.toLocaleString()} of {total.toLocaleString()} judgments
+            {experiment?.status === "running" && " — updating live"}
+          </div>
+        )}
+      </div>
+
+      {/* Choice-specific charts — only shown for a single dilemma */}
+      {showChoiceCharts ? (
+        <>
+          {/* Choice Distribution by Model */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Choice Distribution by Model</CardTitle>
+              <CardDescription>How each model responded across conditions</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={choiceByModelData.data}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip />
+                    <Legend />
+                    {choiceByModelData.series.map((key, i) => (
+                      <Bar key={key} dataKey={key} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Values System Effect */}
+          {choiceByValuesData.series.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Values System Effect</CardTitle>
+                <CardDescription>How values systems shift choice distribution</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={choiceByValuesData.data}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                      <YAxis tick={{ fontSize: 12 }} />
+                      <Tooltip />
+                      <Legend />
+                      {choiceByValuesData.series.map((key, i) => (
+                        <Bar key={key} dataKey={key} stackId="a" fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
+      ) : (
+        <div className="text-sm text-muted-foreground bg-muted rounded-md px-3 py-2">
+          Select a specific dilemma above to see choice distribution charts. Each dilemma has different options, so choice data can only be compared within a single dilemma.
+        </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

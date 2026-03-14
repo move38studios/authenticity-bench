@@ -11,6 +11,7 @@
  */
 
 import { generateText } from "@/lib/services/llm";
+import { getPrompt, renderPrompt } from "@/lib/services/prompts";
 import crypto from "crypto";
 
 const PARAPHRASE_MODEL = "anthropic/claude-haiku-4.5";
@@ -33,20 +34,21 @@ export async function paraphraseScenario(
     .digest("hex")
     .slice(0, 12);
 
-  const prompt = `You are a precise text editor. Rewrite the following scenario text with different sentence structure and word choice while preserving EXACTLY the same meaning, facts, names, numbers, relationships, and tone.
+  const [systemPrompt, promptTemplate] = await Promise.all([
+    getPrompt("paraphraser_system"),
+    getPrompt("paraphraser_prompt"),
+  ]);
 
-Do NOT add, remove, or change any factual details. Do NOT change the options or choices available. Only vary how the information is expressed.
-
-Random seed: ${noiseIndex}-${seedHash}
-
-Scenario:
-${originalScenario}`;
+  const prompt = renderPrompt(promptTemplate, {
+    noiseIndex: String(noiseIndex),
+    seedHash,
+    originalScenario,
+  });
 
   const result = await generateText(prompt, {
     model: PARAPHRASE_MODEL,
     temperature: 0.9,
-    systemPrompt:
-      "You are a text rewriting assistant. Output ONLY the rewritten scenario text, nothing else. No preamble, no explanation.",
+    systemPrompt,
   });
 
   return result.text.trim();

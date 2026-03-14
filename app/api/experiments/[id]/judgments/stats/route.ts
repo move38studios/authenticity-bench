@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { judgment, experiment } from "@/lib/db/schema/experiment";
+import { judgment, experiment, experimentDilemma } from "@/lib/db/schema/experiment";
 import { modelConfig, dilemma, valuesSystem } from "@/lib/db/schema/content";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import { getSession, unauthorized, notFound, ok } from "@/lib/api/helpers";
@@ -8,9 +8,10 @@ import { getSession, unauthorized, notFound, ok } from "@/lib/api/helpers";
  * GET /api/experiments/[id]/judgments/stats
  *
  * Aggregate statistics for charts and summary views.
+ * Supports ?dilemmaId=xxx to filter by dilemma.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSession();
@@ -24,8 +25,26 @@ export async function GET(
   });
   if (!exp) return notFound("Experiment");
 
+  // Parse dilemma filter
+  const url = new URL(request.url);
+  const dilemmaFilter = url.searchParams.get("dilemmaId");
+
+  // Base condition: experiment + completed/refused
+  const baseConditions = [
+    eq(judgment.experimentId, id),
+    inArray(judgment.status, ["completed", "refused"]),
+  ];
+  if (dilemmaFilter) baseConditions.push(eq(judgment.dilemmaId, dilemmaFilter));
+  const baseWhere = and(...baseConditions);
+
+  // All-status conditions (for byStatus query)
+  const allConditions = [eq(judgment.experimentId, id)];
+  if (dilemmaFilter) allConditions.push(eq(judgment.dilemmaId, dilemmaFilter));
+  const allWhere = and(...allConditions);
+
   // Run all aggregation queries in parallel
   const [
+    dilemmas,
     byStatus,
     byModel,
     byChoice,
@@ -36,6 +55,16 @@ export async function GET(
     choiceByModel,
     choiceByValues,
   ] = await Promise.all([
+    // Dilemma list for filter dropdown
+    db
+      .select({
+        dilemmaId: experimentDilemma.dilemmaId,
+        title: dilemma.title,
+      })
+      .from(experimentDilemma)
+      .leftJoin(dilemma, eq(experimentDilemma.dilemmaId, dilemma.id))
+      .where(eq(experimentDilemma.experimentId, id)),
+
     // Count by status
     db
       .select({
@@ -43,7 +72,7 @@ export async function GET(
         count: sql<number>`count(*)`,
       })
       .from(judgment)
-      .where(eq(judgment.experimentId, id))
+      .where(allWhere)
       .groupBy(judgment.status),
 
     // Count by model
@@ -57,22 +86,17 @@ export async function GET(
       })
       .from(judgment)
       .leftJoin(modelConfig, eq(judgment.modelConfigId, modelConfig.id))
-      .where(eq(judgment.experimentId, id))
+      .where(allWhere)
       .groupBy(judgment.modelConfigId, modelConfig.displayName, modelConfig.provider),
 
-    // Count by choice (completed/refused only)
+    // Count by choice
     db
       .select({
         choice: judgment.choice,
         count: sql<number>`count(*)`,
       })
       .from(judgment)
-      .where(
-        and(
-          eq(judgment.experimentId, id),
-          inArray(judgment.status, ["completed", "refused"])
-        )
-      )
+      .where(baseWhere)
       .groupBy(judgment.choice),
 
     // Count by refusal type
@@ -82,12 +106,7 @@ export async function GET(
         count: sql<number>`count(*)`,
       })
       .from(judgment)
-      .where(
-        and(
-          eq(judgment.experimentId, id),
-          inArray(judgment.status, ["completed", "refused"])
-        )
-      )
+      .where(baseWhere)
       .groupBy(judgment.refusalType),
 
     // Count by judgment mode
@@ -98,7 +117,7 @@ export async function GET(
         completedCount: sql<number>`count(*) filter (where ${judgment.status} in ('completed', 'refused'))`,
       })
       .from(judgment)
-      .where(eq(judgment.experimentId, id))
+      .where(allWhere)
       .groupBy(judgment.judgmentMode),
 
     // Count by values system
@@ -110,12 +129,7 @@ export async function GET(
       })
       .from(judgment)
       .leftJoin(valuesSystem, eq(judgment.valuesSystemId, valuesSystem.id))
-      .where(
-        and(
-          eq(judgment.experimentId, id),
-          inArray(judgment.status, ["completed", "refused"])
-        )
-      )
+      .where(baseWhere)
       .groupBy(judgment.valuesSystemId, valuesSystem.name),
 
     // Confidence stats per model
@@ -131,14 +145,13 @@ export async function GET(
       .leftJoin(modelConfig, eq(judgment.modelConfigId, modelConfig.id))
       .where(
         and(
-          eq(judgment.experimentId, id),
-          inArray(judgment.status, ["completed", "refused"]),
+          ...baseConditions,
           sql`${judgment.confidence} IS NOT NULL`
         )
       )
       .groupBy(judgment.modelConfigId, modelConfig.displayName),
 
-    // Choice × model cross-tab (the core chart data)
+    // Choice × model cross-tab
     db
       .select({
         modelConfigId: judgment.modelConfigId,
@@ -148,12 +161,7 @@ export async function GET(
       })
       .from(judgment)
       .leftJoin(modelConfig, eq(judgment.modelConfigId, modelConfig.id))
-      .where(
-        and(
-          eq(judgment.experimentId, id),
-          inArray(judgment.status, ["completed", "refused"])
-        )
-      )
+      .where(baseWhere)
       .groupBy(judgment.modelConfigId, modelConfig.displayName, judgment.choice),
 
     // Choice × values system cross-tab
@@ -166,12 +174,7 @@ export async function GET(
       })
       .from(judgment)
       .leftJoin(valuesSystem, eq(judgment.valuesSystemId, valuesSystem.id))
-      .where(
-        and(
-          eq(judgment.experimentId, id),
-          inArray(judgment.status, ["completed", "refused"])
-        )
-      )
+      .where(baseWhere)
       .groupBy(judgment.valuesSystemId, valuesSystem.name, judgment.choice),
   ]);
 
@@ -181,6 +184,7 @@ export async function GET(
       completed: exp.completedCount,
       failed: exp.failedCount,
     },
+    dilemmas,
     byStatus,
     byModel,
     byChoice,

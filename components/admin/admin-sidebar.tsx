@@ -8,6 +8,9 @@ import {
   ArrowLeft,
   FlaskConical,
   KeyRound,
+  Terminal,
+  MessageSquareCode,
+  FileText,
 } from "lucide-react";
 import {
   Sidebar,
@@ -44,6 +47,8 @@ const navItems: NavItem[] = [
   { title: "API Keys", url: "/admin/api-keys", icon: KeyRound },
   { title: "LLM Playground", url: "/admin/test-llm", icon: FlaskConical },
   { title: "Workflow Test", url: "/admin/test-workflow", icon: FlaskConical },
+  { title: "Code Sandbox", url: "/admin/test-code", icon: Terminal },
+  { title: "System Prompts", url: "/admin/prompts", icon: FileText },
 ];
 
 export function AdminSidebar({ user }: AdminSidebarProps) {
@@ -98,9 +103,7 @@ export function AdminSidebar({ user }: AdminSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>Management</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {navItems.map(renderNavItem)}
-            </SidebarMenu>
+            <SidebarMenu>{navItems.map(renderNavItem)}</SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
